@@ -1,0 +1,283 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+
+enum PricingType {
+  FIXED
+  PRORATE
+  PERCENTAGE
+}
+
+enum ClientStatus {
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum QuotationStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  DENIED
+  EXPIRED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  READY_FOR_TAX_INVOICE
+  READY_TO_SEND
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum EmailRelatedType {
+  QUOTATION
+  INVOICE
+}
+
+enum UserRole {
+  ADMIN
+  FINANCE
+}
+
+// Models
+
+model Product {
+  id             String      @id @default(uuid())
+  name           String
+  pricingType    PricingType
+  unitName       String
+  priceUsd       Decimal     @db.Decimal(10, 2)
+  percentageRate Decimal?    @db.Decimal(5, 4) // e.g. 0.1500 for 15%
+  billingCycle   String // e.g. "MONTHLY"
+  active         Boolean     @default(true)
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Client {
+  id               String       @id @default(uuid())
+  name             String
+  legalName        String?
+  billingEmail     String
+  financeEmail     String?
+  taxId            String? // NPWP
+  address          String?
+  defaultCurrency  String       @default("IDR")
+  paymentTermsDays Int          @default(30)
+  status           ClientStatus @default(ACTIVE)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  subscriptions Subscription[]
+  quotations    Quotation[]
+  invoices      Invoice[]
+  payments      Payment[]
+}
+
+model Subscription {
+  id                 String             @id @default(uuid())
+  clientId           String
+  productId          String
+  status             SubscriptionStatus @default(ACTIVE)
+  startDate          DateTime           @db.Date
+  endDate            DateTime?          @db.Date
+  billingAnchorDay   Int // e.g. 5
+  unitPriceUsdOverride Decimal?           @db.Decimal(10, 2)
+  notes              String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  client  Client  @relation(fields: [clientId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  usageDaily     UsageDaily[]
+  quotationLines QuotationLine[]
+  invoiceLines   InvoiceLine[]
+}
+
+model UsageDaily {
+  id             String   @id @default(uuid())
+  subscriptionId String
+  date           DateTime @db.Date
+  quantity       Decimal  @db.Decimal(12, 4)
+  source         String   @default("manual") // "manual", "import_csv", "api"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+
+  @@unique([subscriptionId, date])
+}
+
+model FxRate {
+  id           String   @id @default(uuid())
+  dateEffective DateTime @db.Date
+  usdToIdr     Decimal  @db.Decimal(10, 2)
+  source       String   @default("manual")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Quotation {
+  id             String          @id @default(uuid())
+  quoteNumber    String          @unique
+  clientId       String
+  periodStart    DateTime        @db.Date
+  periodEnd      DateTime        @db.Date
+  status         QuotationStatus @default(DRAFT)
+  subtotalUsd    Decimal         @db.Decimal(15, 2)
+  fxRateUsdToIdr Decimal         @db.Decimal(10, 2)
+  subtotalIdr    Decimal         @db.Decimal(15, 2)
+  taxRate        Decimal         @db.Decimal(5, 4) // e.g. 0.1100
+  taxAmountIdr   Decimal         @db.Decimal(15, 2)
+  totalIdr       Decimal         @db.Decimal(15, 2)
+  pdfPath        String?
+  sentAt         DateTime?
+  acceptedAt     DateTime?
+  deniedAt       DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  client Client          @relation(fields: [clientId], references: [id])
+  lines  QuotationLine[]
+  invoices Invoice[]
+}
+
+model QuotationLine {
+  id                   String      @id @default(uuid())
+  quotationId          String
+  subscriptionId       String?
+  productNameSnapshot  String
+  pricingTypeSnapshot  PricingType
+  unitNameSnapshot     String
+  periodStart          DateTime    @db.Date
+  periodEnd            DateTime    @db.Date
+  quantityTotal        Decimal     @db.Decimal(12, 4)
+  unitPriceUsd         Decimal     @db.Decimal(10, 2)
+  amountUsd            Decimal     @db.Decimal(15, 2)
+  amountIdr            Decimal     @db.Decimal(15, 2)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  quotation    Quotation     @relation(fields: [quotationId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+}
+
+model Invoice {
+  id          String        @id @default(uuid())
+  invoiceNumber String        @unique
+  clientId    String
+  quotationId String
+  periodStart DateTime      @db.Date
+  periodEnd   DateTime      @db.Date
+  status      InvoiceStatus @default(DRAFT)
+  subtotalIdr Decimal       @db.Decimal(15, 2)
+  taxRate     Decimal       @db.Decimal(5, 4)
+  taxAmountIdr Decimal       @db.Decimal(15, 2)
+  totalIdr    Decimal       @db.Decimal(15, 2)
+  dueDate     DateTime      @db.Date
+  pdfPath     String?
+  sentAt      DateTime?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  client      Client        @relation(fields: [clientId], references: [id])
+  quotation   Quotation     @relation(fields: [quotationId], references: [id])
+  lines       InvoiceLine[]
+  taxInvoices TaxInvoice[]
+  payments    Payment[]
+}
+
+model InvoiceLine {
+  id                   String      @id @default(uuid())
+  invoiceId            String
+  subscriptionId       String?
+  productNameSnapshot  String
+  pricingTypeSnapshot  PricingType
+  unitNameSnapshot     String
+  periodStart          DateTime    @db.Date
+  periodEnd            DateTime    @db.Date
+  quantityTotal        Decimal     @db.Decimal(12, 4)
+  unitPriceUsd         Decimal     @db.Decimal(10, 2)
+  amountUsd            Decimal?    @db.Decimal(15, 2)
+  amountIdr            Decimal     @db.Decimal(15, 2)
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  invoice      Invoice       @relation(fields: [invoiceId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+}
+
+model TaxInvoice {
+  id               String   @id @default(uuid())
+  invoiceId        String
+  filePath         String
+  uploadedByUserId String?
+  uploadedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  clientId      String
+  invoiceId     String
+  amountIdr     Decimal  @db.Decimal(15, 2)
+  paidAt        DateTime
+  paymentMethod String
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  client  Client  @relation(fields: [clientId], references: [id])
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+}
+
+model EmailLog {
+  id             String           @id @default(uuid())
+  relatedType    EmailRelatedType
+  relatedId      String
+  toEmail        String
+  subject        String
+  bodyPreview    String
+  gmailMessageId String?
+  sentAt         DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  role         UserRole
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
