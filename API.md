@@ -6,18 +6,61 @@
 
 ---
 
-## Table of Contents
+## 📋 Table of Contents
 
-1. [Health Check](#health-check)
-2. [Authentication API](#authentication-api)
-3. [Products API](#products-api)
-4. [Clients API](#clients-api)
-5. [Subscriptions API](#subscriptions-api)
-6. [Usage Daily API](#usage-daily-api)
-7. [FX Rates API](#fx-rates-api)
-8. [Quotations API](#quotations-api)
-9. [Invoices API](#invoices-api)
-10. [Error Handling](#error-handling)
+1. [Overview](#overview)
+2. [Authentication](#authentication)
+3. [Health Check](#health-check)
+4. [Authentication API](#authentication-api)
+5. [Products API](#products-api)
+6. [Clients API](#clients-api)
+7. [Subscriptions API](#subscriptions-api)
+8. [Usage Daily API](#usage-daily-api)
+9. [FX Rates API](#fx-rates-api)
+10. [Quotations API](#quotations-api)
+11. [Invoices API](#invoices-api)
+12. [Error Handling](#error-handling)
+
+---
+
+## Overview
+
+The GITS Cloud Billing API provides comprehensive endpoints for managing cloud service billing, subscriptions, quotations, and invoices. The API uses REST principles, returns JSON responses, and supports OAuth2 authentication via Google.
+
+### Endpoint Summary
+
+| Category | Endpoints | Auth Required |
+|----------|-----------|---------------|
+| Health | 1 | No |
+| Authentication | 3 | Partial |
+| Products | 5 | No |
+| Clients | 6 | No |
+| Subscriptions | 4 | No |
+| Usage Daily | 3 | No |
+| FX Rates | 3 | No |
+| Quotations | 6 | Partial |
+| Invoices | 5 | Yes |
+| **Total** | **36** | - |
+
+---
+
+## Authentication
+
+### Protected Endpoints
+
+Endpoints marked with 🔒 require authentication. Include the JWT token in the `Authorization` header:
+
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+### Getting a Token
+
+1. Get OAuth URL: `GET /api/auth/google/url`
+2. Redirect user to Google OAuth
+3. Handle callback: `GET /api/auth/google/callback?code=...`
+4. Store returned `token` in your application
+5. Use token in `Authorization` header for protected endpoints
 
 ---
 
@@ -27,38 +70,47 @@
 
 **Endpoint:** `GET /health`
 
-**Description:** Check if the server is running.
+**Description:** Check if the server is running and healthy.
 
-**Response:**
+**Response (200 OK):**
 ```json
 {
   "status": "ok"
 }
 ```
 
+**Example:**
+```bash
+curl http://localhost:3000/health
+```
+
 ---
 
 ## Authentication API
 
-### Get Google OAuth2 Login URL
+### Get Google OAuth2 URL
 
 **Endpoint:** `GET /api/auth/google/url`
 
-**Description:** Get the Google OAuth2 authorization URL to redirect users for login.
+**Description:** Retrieve the Google OAuth2 authorization URL for user login.
 
-**Response:**
+**Response (200 OK):**
 ```json
 {
-  "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=..."
+  "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...&redirect_uri=...&response_type=code&scope=..."
 }
 ```
 
-**Usage:**
+**Usage Flow:**
+1. Call this endpoint from your frontend
+2. Redirect user's browser to the returned URL
+3. User authenticates with Google
+4. Google redirects back to callback URL with `code` parameter
+
+**Example:**
 ```bash
 curl http://localhost:3000/api/auth/google/url
 ```
-
-Redirect the user's browser to the returned URL. After authentication, Google will redirect back to the callback URL with an authorization code.
 
 ---
 
@@ -69,9 +121,9 @@ Redirect the user's browser to the returned URL. After authentication, Google wi
 **Query Parameters:**
 - `code` (required): Authorization code from Google
 
-**Description:** Handle Google OAuth2 callback and exchange authorization code for user tokens. This endpoint is automatically called by Google after user login.
+**Description:** Exchange authorization code for user tokens. This endpoint is automatically called by Google after user authentication.
 
-**Response:**
+**Response (200 OK):**
 ```json
 {
   "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
@@ -79,24 +131,36 @@ Redirect the user's browser to the returned URL. After authentication, Google wi
     "id": "uuid",
     "email": "user@gmail.com",
     "name": "John Doe",
-    "pictureUrl": "https://lh3.googleusercontent.com/...",
-    "role": "ADMIN"
+    "role": "ADMIN",
+    "pictureUrl": "https://lh3.googleusercontent.com/..."
   }
 }
 ```
 
 **Usage:**
-Store the returned `token` in your client application (e.g., localStorage) and include it in the `Authorization` header for protected endpoints:
+Store the `token` in your frontend (localStorage, sessionStorage, or secure cookie) and include it in the `Authorization` header for protected endpoints.
 
+**Error Responses:**
+
+**400 Bad Request:** Missing code
+```json
+{
+  "error": "Missing code parameter"
+}
 ```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+**500 Internal Server Error:** Authentication failed
+```json
+{
+  "error": "Authentication failed"
+}
 ```
 
 ---
 
-### Get Current User
+### Get Current User Info
 
-**Endpoint:** `GET /api/auth/me`
+**Endpoint:** `GET /api/auth/me` 🔒
 
 **Authentication:** Required
 
@@ -105,7 +169,7 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 Authorization: Bearer <your_jwt_token>
 ```
 
-**Description:** Get the current authenticated user's information.
+**Description:** Retrieve information about the currently authenticated user.
 
 **Response (200 OK):**
 ```json
@@ -114,23 +178,36 @@ Authorization: Bearer <your_jwt_token>
   "email": "user@gmail.com",
   "name": "John Doe",
   "role": "ADMIN",
+  "googleId": "1234567890",
   "googleEmail": "user@gmail.com",
-  "pictureUrl": "https://lh3.googleusercontent.com/..."
+  "pictureUrl": "https://lh3.googleusercontent.com/...",
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:00:00.000Z"
 }
 ```
 
-**Response (401 Unauthorized):**
+**Note:** Sensitive fields (`accessToken`, `refreshToken`, `passwordHash`) are excluded from the response.
+
+**Error Responses:**
+
+**401 Unauthorized:** No token provided
 ```json
 {
   "error": "No token provided"
 }
 ```
 
-**Response (403 Forbidden):**
+**403 Forbidden:** Invalid token
 ```json
 {
   "error": "Invalid or expired token"
 }
+```
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer <token>" \
+  http://localhost:3000/api/auth/me
 ```
 
 ---
@@ -142,11 +219,13 @@ Authorization: Bearer <your_jwt_token>
 **Endpoint:** `GET /api/products`
 
 **Query Parameters:**
-- `active` (optional): Filter by active status (`true` or `false`)
+- `active` (optional): Filter by status (`true` or `false`)
+
+**Description:** Retrieve all products, optionally filtered by active status.
 
 **Example Request:**
 ```bash
-curl http://localhost:3000/api/products?active=true
+curl "http://localhost:3000/api/products?active=true"
 ```
 
 **Response (200 OK):**
@@ -154,19 +233,24 @@ curl http://localhost:3000/api/products?active=true
 [
   {
     "id": "uuid",
-    "name": "Google Workspace Business Standard",
-    "pricingType": "FIXED",
+    "name": "Business Standard (Flex)",
+    "pricingType": "PRORATE",
     "unitName": "license",
-    "priceUsd": "12.00",
+    "priceUsd": "16.80",
     "percentageRate": null,
     "billingCycle": "MONTHLY",
     "active": true,
-    "notes": "Fixed monthly fee per user license",
+    "notes": "GWS-BUS-STD-M - Prorate usage-based",
     "createdAt": "2025-01-01T00:00:00.000Z",
     "updatedAt": "2025-01-01T00:00:00.000Z"
   }
 ]
 ```
+
+**Pricing Types:**
+- `FIXED`: Standard fixed price
+- `PRORATE`: Usage-based prorated pricing
+- `PERCENTAGE`: Percentage-based fee (requires `percentageRate`)
 
 ---
 
@@ -177,29 +261,26 @@ curl http://localhost:3000/api/products?active=true
 **Path Parameters:**
 - `id`: Product UUID
 
-**Example Request:**
-```bash
-curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
-```
-
 **Response (200 OK):**
 ```json
 {
-  "id": "123e4567-e89b-12d3-a456-426614174000",
-  "name": "Google Workspace Business Standard",
-  "pricingType": "FIXED",
+  "id": "uuid",
+  "name": "Business Standard (Flex)",
+  "pricingType": "PRORATE",
   "unitName": "license",
-  "priceUsd": "12.00",
+  "priceUsd": "16.80",
   "percentageRate": null,
   "billingCycle": "MONTHLY",
   "active": true,
-  "notes": "Fixed monthly fee per user license",
+  "notes": "GWS-BUS-STD-M",
   "createdAt": "2025-01-01T00:00:00.000Z",
   "updatedAt": "2025-01-01T00:00:00.000Z"
 }
 ```
 
-**Response (404 Not Found):**
+**Error Responses:**
+
+**404 Not Found:**
 ```json
 {
   "error": "Product not found"
@@ -215,28 +296,23 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 **Request Body:**
 ```json
 {
-  "name": "Google Workspace Business Standard",
-  "pricingType": "FIXED",
+  "name": "Business Standard (Flex)",
+  "pricingType": "PRORATE",
   "unitName": "license",
-  "priceUsd": 12.00,
+  "priceUsd": 16.80,
   "billingCycle": "MONTHLY",
   "active": true,
-  "notes": "Fixed monthly fee per user license"
+  "notes": "GWS-BUS-STD-M"
 }
 ```
 
-**Pricing Types:**
-- `FIXED`: Standard fixed price
-- `PRORATE`: Usage-based prorated pricing
-- `PERCENTAGE`: Percentage-based fee (requires `percentageRate`)
-
-**Example for Percentage Product:**
+**For Percentage Products:**
 ```json
 {
   "name": "IT Management Fee",
   "pricingType": "PERCENTAGE",
   "unitName": "percentage",
-  "priceUsd": 0.10,
+  "priceUsd": 0,
   "percentageRate": 0.1000,
   "billingCycle": "MONTHLY",
   "active": true,
@@ -248,14 +324,14 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 ```json
 {
   "id": "uuid",
-  "name": "Google Workspace Business Standard",
-  "pricingType": "FIXED",
+  "name": "Business Standard (Flex)",
+  "pricingType": "PRORATE",
   "unitName": "license",
-  "priceUsd": "12.00",
+  "priceUsd": "16.80",
   "percentageRate": null,
   "billingCycle": "MONTHLY",
   "active": true,
-  "notes": "Fixed monthly fee per user license",
+  "notes": "GWS-BUS-STD-M",
   "createdAt": "2025-01-01T00:00:00.000Z",
   "updatedAt": "2025-01-01T00:00:00.000Z"
 }
@@ -267,31 +343,16 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 
 **Endpoint:** `PUT /api/products/:id`
 
-**Request Body:** (same as Create, all fields optional)
+**Request Body:** (all fields optional)
 ```json
 {
-  "name": "Google Workspace Updated",
-  "priceUsd": 15.00,
+  "name": "Updated Product Name",
+  "priceUsd": 18.00,
   "active": false
 }
 ```
 
-**Response (200 OK):**
-```json
-{
-  "id": "uuid",
-  "name": "Google Workspace Updated",
-  "pricingType": "FIXED",
-  "unitName": "license",
-  "priceUsd": "15.00",
-  "percentageRate": null,
-  "billingCycle": "MONTHLY",
-  "active": false,
-  "notes": "Fixed monthly fee per user license",
-  "createdAt": "2025-01-01T00:00:00.000Z",
-  "updatedAt": "2025-01-02T00:00:00.000Z"
-}
-```
+**Response (200 OK):** Updated product object
 
 ---
 
@@ -328,7 +389,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
     "billingEmail": "billing@techstart.id",
     "financeEmail": "finance@techstart.id",
     "taxId": "01.234.567.8-901.000",
-    "address": "Jl. Sudirman No. 123, Jakarta Selatan 12190",
+    "address": "Jl. Sudirman No. 123, Jakarta",
     "defaultCurrency": "IDR",
     "paymentTermsDays": 30,
     "status": "ACTIVE",
@@ -344,22 +405,14 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 
 **Endpoint:** `GET /api/clients/:id`
 
-**Response (200 OK):**
+**Response (200 OK):** Single client object (same structure as list)
+
+**Error Responses:**
+
+**404 Not Found:**
 ```json
 {
-  "id": "uuid",
-  "name": "TechStart Indonesia",
-  "legalName": "PT TechStart Indonesia",
-  "aliases": ["TechStart", "TSI"],
-  "billingEmail": "billing@techstart.id",
-  "financeEmail": "finance@techstart.id",
-  "taxId": "01.234.567.8-901.000",
-  "address": "Jl. Sudirman No. 123, Jakarta Selatan 12190",
-  "defaultCurrency": "IDR",
-  "paymentTermsDays": 30,
-  "status": "ACTIVE",
-  "createdAt": "2025-01-01T00:00:00.000Z",
-  "updatedAt": "2025-01-01T00:00:00.000Z"
+  "error": "Client not found"
 }
 ```
 
@@ -378,31 +431,18 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
   "billingEmail": "billing@techstart.id",
   "financeEmail": "finance@techstart.id",
   "taxId": "01.234.567.8-901.000",
-  "address": "Jl. Sudirman No. 123, Jakarta Selatan 12190",
+  "address": "Jl. Sudirman No. 123, Jakarta",
   "defaultCurrency": "IDR",
   "paymentTermsDays": 30,
   "status": "ACTIVE"
 }
 ```
 
-**Response (201 Created):**
-```json
-{
-  "id": "uuid",
-  "name": "TechStart Indonesia",
-  "legalName": "PT TechStart Indonesia",
-  "aliases": ["TechStart", "TSI"],
-  "billingEmail": "billing@techstart.id",
-  "financeEmail": "finance@techstart.id",
-  "taxId": "01.234.567.8-901.000",
-  "address": "Jl. Sudirman No. 123, Jakarta Selatan 12190",
-  "defaultCurrency": "IDR",
-  "paymentTermsDays": 30,
-  "status": "ACTIVE",
-  "createdAt": "2025-01-01T00:00:00.000Z",
-  "updatedAt": "2025-01-01T00:00:00.000Z"
-}
-```
+**Required Fields:**
+- `name`
+- `billingEmail`
+
+**Response (201 Created):** Created client object
 
 ---
 
@@ -418,7 +458,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 }
 ```
 
-**Response (200 OK):** (Updated client object)
+**Response (200 OK):** Updated client object
 
 ---
 
@@ -435,11 +475,11 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 
 ---
 
-## Subscriptions API
-
 ### List Client Subscriptions
 
 **Endpoint:** `GET /api/clients/:clientId/subscriptions`
+
+**Description:** Retrieve all subscriptions for a specific client.
 
 **Response (200 OK):**
 ```json
@@ -449,7 +489,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
     "clientId": "uuid",
     "productId": "uuid",
     "status": "ACTIVE",
-    "startDate": "2025-01-01T00:00:00.000Z",
+    "startDate": "2025-01-01",
     "endDate": null,
     "billingAnchorDay": 5,
     "unitPriceUsdOverride": null,
@@ -463,6 +503,8 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 ```
 
 ---
+
+## Subscriptions API
 
 ### Get Subscription by ID
 
@@ -506,10 +548,10 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 ```
 
 **Optional Fields:**
-- `endDate`: Subscription end date (null for ongoing)
+- `endDate`: Subscription end date (null = ongoing)
 - `unitPriceUsdOverride`: Custom price override
 
-**Response (201 Created):** (Created subscription object)
+**Response (201 Created):** Created subscription object
 
 ---
 
@@ -525,7 +567,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 }
 ```
 
-**Response (200 OK):** (Updated subscription object)
+**Response (200 OK):** Updated subscription object
 
 ---
 
@@ -552,7 +594,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 - `startDate` (optional): Filter from date (YYYY-MM-DD)
 - `endDate` (optional): Filter to date (YYYY-MM-DD)
 
-**Example Request:**
+**Example:**
 ```bash
 curl "http://localhost:3000/api/subscriptions/uuid/usage?startDate=2025-01-01&endDate=2025-01-31"
 ```
@@ -592,6 +634,8 @@ curl "http://localhost:3000/api/subscriptions/uuid/usage?startDate=2025-01-01&en
 - `import_csv`: Imported from CSV
 - `api`: From external API
 
+**Behavior:** Creates or updates usage record for the given date. Only one usage record per subscription per date.
+
 **Response (200 OK):**
 ```json
 {
@@ -601,7 +645,7 @@ curl "http://localhost:3000/api/subscriptions/uuid/usage?startDate=2025-01-01&en
   "quantity": "70.0000",
   "source": "api",
   "createdAt": "2025-01-05T00:00:00.000Z",
-  "updatedAt": "2025-01-05T00:00:00.000Z"
+  "updatedAt": "2025-01-05T10:30:00.000Z"
 }
 ```
 
@@ -611,7 +655,7 @@ curl "http://localhost:3000/api/subscriptions/uuid/usage?startDate=2025-01-01&en
 
 **Endpoint:** `DELETE /api/subscriptions/:subscriptionId/usage`
 
-**Description:** Deletes all usage records for the subscription
+**Description:** Delete ALL usage records for the subscription.
 
 **Response (200 OK):**
 ```json
@@ -629,6 +673,8 @@ curl "http://localhost:3000/api/subscriptions/uuid/usage?startDate=2025-01-01&en
 
 **Endpoint:** `GET /api/fx-rates/active`
 
+**Description:** Get the currently active USD to IDR exchange rate.
+
 **Response (200 OK):**
 ```json
 {
@@ -642,7 +688,9 @@ curl "http://localhost:3000/api/subscriptions/uuid/usage?startDate=2025-01-01&en
 }
 ```
 
-**Response (404 Not Found):**
+**Error Responses:**
+
+**404 Not Found:**
 ```json
 {
   "error": "No active FX rate found"
@@ -658,23 +706,12 @@ curl "http://localhost:3000/api/subscriptions/uuid/usage?startDate=2025-01-01&en
 **Query Parameters:**
 - `date` (required): Effective date (YYYY-MM-DD)
 
-**Example Request:**
+**Example:**
 ```bash
 curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 ```
 
-**Response (200 OK):**
-```json
-{
-  "id": "uuid",
-  "dateEffective": "2025-01-01",
-  "usdToIdr": "16000.00",
-  "source": "manual",
-  "active": true,
-  "createdAt": "2025-01-01T00:00:00.000Z",
-  "updatedAt": "2025-01-01T00:00:00.000Z"
-}
-```
+**Response (200 OK):** FX rate object (same structure as active rate)
 
 ---
 
@@ -730,12 +767,21 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 
 **Required Fields:**
 - `clientId`: Client UUID
-- `periodStart`: Period start date
-- `periodEnd`: Period end date
+- `periodStart`: Period start date (YYYY-MM-DD)
+- `periodEnd`: Period end date (YYYY-MM-DD)
 - `taxRate`: Tax rate (e.g., 0.11 for 11%)
 
 **Optional Fields:**
 - `fxRateUsdToIdr`: Custom FX rate (defaults to active rate if not provided)
+
+**Behavior:**
+1. Retrieves all active subscriptions for client
+2. Calculates billing for each subscription based on pricing type
+3. For PRORATE products, aggregates usage from UsageDaily
+4. Generates quote number (Q-YYYYMMDD-XXXX)
+5. Creates quotation and line items
+6. Generates PDF automatically
+7. Returns quotation with status DRAFT
 
 **Response (201 Created):**
 ```json
@@ -763,13 +809,13 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
       "id": "uuid",
       "quotationId": "uuid",
       "subscriptionId": "uuid",
-      "productNameSnapshot": "Google Workspace Flexible",
+      "productNameSnapshot": "Business Standard (Flex)",
       "pricingTypeSnapshot": "PRORATE",
-      "unitNameSnapshot": "unit",
+      "unitNameSnapshot": "license",
       "periodStart": "2025-01-01",
       "periodEnd": "2025-01-31",
       "quantityTotal": "805.0000",
-      "unitPriceUsd": "0.23",
+      "unitPriceUsd": "0.56",
       "amountUsd": "187.84",
       "amountIdr": "3005440.00",
       "createdAt": "2025-01-01T00:00:00.000Z",
@@ -781,14 +827,14 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 
 **Error Responses:**
 
-**400 Bad Request:** Missing required fields
+**400 Bad Request:**
 ```json
 {
   "error": "clientId, periodStart, periodEnd, and taxRate are required"
 }
 ```
 
-**500 Internal Server Error:** No active FX rate
+**500 Internal Server Error:**
 ```json
 {
   "error": "No active FX rate found and none provided."
@@ -806,17 +852,7 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 {
   "id": "uuid",
   "quoteNumber": "Q-20250101-A1B2",
-  "clientId": "uuid",
-  "periodStart": "2025-01-01",
-  "periodEnd": "2025-01-31",
   "status": "SENT",
-  "subtotalUsd": "187.84",
-  "fxRateUsdToIdr": "16000.00",
-  "subtotalIdr": "3005440.00",
-  "taxRate": "0.1100",
-  "taxAmountIdr": "330599.00",
-  "totalIdr": "3336039.00",
-  "pdfPath": "storage/quotations/Q-20250101-A1B2.pdf",
   "sentAt": "2025-01-02T00:00:00.000Z",
   "client": { ... },
   "lines": [ ... ]
@@ -829,14 +865,14 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 
 **Endpoint:** `GET /api/quotations/:id/email-preview`
 
-**Description:** Preview email content before sending
+**Description:** Preview email content before sending.
 
 **Response (200 OK):**
 ```json
 {
   "subject": "Quotation for TechStart Indonesia - Q-20250101-A1B2",
-  "htmlBody": "<p>Dear <strong>TechStart Indonesia</strong>,</p><p>Please find attached the quotation <strong>Q-20250101-A1B2</strong> for the period <strong>2025-01-01</strong> to <strong>2025-01-31</strong>.</p><p>Total Amount: <strong>Rp 3,336,039</strong></p><br/><p>Best regards,<br/>GITS Cloud Billing Team</p>",
-  "textBody": "Dear TechStart Indonesia,\n\nPlease find attached the quotation Q-20250101-A1B2 for the period 2025-01-01 to 2025-01-31.\n\nTotal Amount: Rp 3,336,039\n\nBest regards,\nGITS Cloud Billing Team",
+  "htmlBody": "<p>Dear <strong>TechStart Indonesia</strong>,...</p>",
+  "textBody": "Dear TechStart Indonesia,\n\nPlease find attached...",
   "toEmailDefault": "billing@techstart.id"
 }
 ```
@@ -845,9 +881,16 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 
 ### Send Quotation Email
 
-**Endpoint:** `POST /api/quotations/:id/send-email`
+**Endpoint:** `POST /api/quotations/:id/send-email` 🔒
 
-**Request Body (All Optional):**
+**Authentication:** Required
+
+**Headers:**
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+**Request Body:** (all optional)
 ```json
 {
   "toEmail": "custom@email.com",
@@ -858,10 +901,11 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 ```
 
 **Behavior:**
-- Attaches PDF to email
+- Sends email from authenticated user's Gmail account
+- Attaches quotation PDF
 - Creates EmailLog record
-- Updates quotation status to `SENT`
-- Updates `sentAt` timestamp
+- Updates quotation status to SENT
+- Sets `sentAt` timestamp
 
 **Response (200 OK):**
 ```json
@@ -876,21 +920,14 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 
 **Error Responses:**
 
-**500 Internal Server Error:** Gmail credentials not configured
+**401 Unauthorized:**
 ```json
 {
-  "error": "Gmail credentials are not fully configured in environment variables."
+  "error": "No token provided"
 }
 ```
 
-**500 Internal Server Error:** PDF not found
-```json
-{
-  "error": "PDF file not found at /path/to/file.pdf"
-}
-```
-
-**500 Internal Server Error:** Invalid quotation status
+**500 Internal Server Error:**
 ```json
 {
   "error": "Cannot send quotation in status ACCEPTED"
@@ -901,23 +938,20 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 
 ### Accept Quotation
 
-**Endpoint:** `POST /api/quotations/:id/accept`
+**Endpoint:** `POST /api/quotations/:id/accept` 🔒
 
 **Authentication:** Required
-
-**Headers:**
-```
-Authorization: Bearer <your_jwt_token>
-```
 
 **Description:** Accept a quotation and automatically create an invoice.
 
 **Behavior:**
-- Sets quotation status to `ACCEPTED`
-- Sets `acceptedAt` timestamp
-- Creates a new Invoice with status `READY_FOR_TAX_INVOICE`
-- Generates invoice PDF automatically
-- Copies quotation lines to invoice lines
+1. Sets quotation status to ACCEPTED
+2. Sets `acceptedAt` timestamp
+3. Generates invoice number (INV-YYYYMMDD-XXXX)
+4. Creates Invoice record with status READY_FOR_TAX_INVOICE
+5. Copies quotation lines to invoice lines
+6. Generates invoice PDF automatically
+7. Calculates due date (creationDate + client.paymentTermsDays)
 
 **Response (200 OK):**
 ```json
@@ -932,7 +966,7 @@ Authorization: Bearer <your_jwt_token>
 
 **Error Responses:**
 
-**400 Bad Request:** Already accepted/denied
+**400 Bad Request:**
 ```json
 {
   "error": "Quotation is already ACCEPTED"
@@ -943,19 +977,14 @@ Authorization: Bearer <your_jwt_token>
 
 ### Deny Quotation
 
-**Endpoint:** `POST /api/quotations/:id/deny`
+**Endpoint:** `POST /api/quotations/:id/deny` 🔒
 
 **Authentication:** Required
-
-**Headers:**
-```
-Authorization: Bearer <your_jwt_token>
-```
 
 **Description:** Deny a quotation.
 
 **Behavior:**
-- Sets quotation status to `DENIED`
+- Sets quotation status to DENIED
 - Sets `deniedAt` timestamp
 
 **Response (200 OK):**
@@ -975,19 +1004,23 @@ Authorization: Bearer <your_jwt_token>
 
 ### List Invoices
 
-**Endpoint:** `GET /api/invoices`
+**Endpoint:** `GET /api/invoices` 🔒
 
 **Authentication:** Required
 
-**Headers:**
-```
-Authorization: Bearer <your_jwt_token>
-```
-
 **Query Parameters:**
-- `status` (optional): Filter by status (e.g., `READY_FOR_TAX_INVOICE`, `READY_TO_SEND`, `SENT`)
+- `status` (optional): Filter by status
 
-**Example Request:**
+**Status Values:**
+- `DRAFT`
+- `READY_FOR_TAX_INVOICE`
+- `READY_TO_SEND`
+- `SENT`
+- `PAID`
+- `OVERDUE`
+- `CANCELLED`
+
+**Example:**
 ```bash
 curl -H "Authorization: Bearer <token>" \
   "http://localhost:3000/api/invoices?status=READY_FOR_TAX_INVOICE"
@@ -1011,7 +1044,9 @@ curl -H "Authorization: Bearer <token>" \
     "totalIdr": "3336039.00",
     "pdfPath": "storage/invoices/INV-20250102-A1B2.pdf",
     "sentAt": null,
+    "paidAt": null,
     "createdAt": "2025-01-02T10:30:00.000Z",
+    "updatedAt": "2025-01-02T10:30:00.000Z",
     "client": { ... }
   }
 ]
@@ -1021,7 +1056,7 @@ curl -H "Authorization: Bearer <token>" \
 
 ### Get Invoice by ID
 
-**Endpoint:** `GET /api/invoices/:id`
+**Endpoint:** `GET /api/invoices/:id` 🔒
 
 **Authentication:** Required
 
@@ -1030,20 +1065,15 @@ curl -H "Authorization: Bearer <token>" \
 {
   "id": "uuid",
   "invoiceNumber": "INV-20250102-A1B2",
-  "clientId": "uuid",
-  "quotationId": "uuid",
   "status": "READY_TO_SEND",
-  "periodStart": "2025-01-01",
-  "periodEnd": "2025-01-31",
   "dueDate": "2025-02-01",
   "subtotalIdr": "3005440.00",
   "taxRate": "0.1100",
   "taxAmountIdr": "330599.00",
   "totalIdr": "3336039.00",
   "pdfPath": "storage/invoices/INV-20250102-A1B2.pdf",
-  "sentAt": null,
-  "createdAt": "2025-01-02T10:30:00.000Z",
   "client": { ... },
+  "quotation": { ... },
   "lines": [ ... ],
   "taxInvoices": [
     {
@@ -1051,6 +1081,7 @@ curl -H "Authorization: Bearer <token>" \
       "invoiceId": "uuid",
       "filePath": "storage/tax-invoices/tax-inv-1234567890-123456789.pdf",
       "uploadedByUserId": "uuid",
+      "uploadedAt": "2025-01-02T11:00:00.000Z",
       "createdAt": "2025-01-02T11:00:00.000Z"
     }
   ]
@@ -1061,7 +1092,7 @@ curl -H "Authorization: Bearer <token>" \
 
 ### Upload Tax Invoice
 
-**Endpoint:** `POST /api/invoices/:id/tax-invoice`
+**Endpoint:** `POST /api/invoices/:id/tax-invoice` 🔒
 
 **Authentication:** Required
 
@@ -1070,9 +1101,14 @@ curl -H "Authorization: Bearer <token>" \
 **Form Data:**
 - `file` (required): PDF file of the tax invoice (faktur pajak)
 
-**Description:** Upload a tax invoice PDF and update invoice status to `READY_TO_SEND`.
+**Description:** Upload a tax invoice PDF and update invoice status.
 
-**Example Request (using curl):**
+**Behavior:**
+- Saves PDF to `storage/tax-invoices/` with unique filename
+- Creates TaxInvoice record in database
+- Updates invoice status from READY_FOR_TAX_INVOICE to READY_TO_SEND
+
+**Example (curl):**
 ```bash
 curl -X POST \
   -H "Authorization: Bearer <token>" \
@@ -1080,49 +1116,43 @@ curl -X POST \
   http://localhost:3000/api/invoices/<invoice_id>/tax-invoice
 ```
 
-**Example Request (using Postman):**
-1. Set method to POST
-2. Add `Authorization: Bearer <token>` header
-3. Go to Body tab
-4. Select `form-data`
-5. Add key `file` with type `File`
-6. Select your PDF file
+**Example (Postman):**
+1. Method: POST
+2. Headers: `Authorization: Bearer <token>`
+3. Body → form-data
+4. Key: `file` (type: File)
+5. Value: Select PDF file
 
 **Response (200 OK):**
 ```json
 {
   "success": true,
-  "filePath": "storage/tax-invoices/tax-inv-1234567890-123456789.pdf"
+  "filePath": "storage/tax-invoices/tax-inv-1736234567890-987654321.pdf"
 }
 ```
 
-**Behavior:**
-- Saves PDF file to `storage/tax-invoices/`
-- Creates `TaxInvoice` record in database
-- Updates invoice status from `READY_FOR_TAX_INVOICE` to `READY_TO_SEND`
-
 **Error Responses:**
 
-**400 Bad Request:** No file uploaded
+**400 Bad Request:**
 ```json
 {
   "error": "No file uploaded"
 }
 ```
 
-**MulterError:** Field name missing
+**MulterError:**
 ```json
 {
   "error": "Field name missing"
 }
 ```
-*This occurs when the file field is not named `file`.*
+*Note: This occurs when the form field is not named `file`*
 
 ---
 
 ### Get Invoice Email Preview
 
-**Endpoint:** `GET /api/invoices/:id/email-preview`
+**Endpoint:** `GET /api/invoices/:id/email-preview` 🔒
 
 **Authentication:** Required
 
@@ -1132,7 +1162,7 @@ curl -X POST \
 ```json
 {
   "subject": "Invoice INV-20250102-A1B2 - TechStart Indonesia",
-  "htmlBody": "<p>Yth. Tim Keuangan <strong>TechStart Indonesia</strong>,</p>...",
+  "htmlBody": "<p>Yth. Tim Keuangan <strong>TechStart Indonesia</strong>,...</p>",
   "textBody": "Yth. Tim Keuangan TechStart Indonesia,\n\nBerikut kami sampaikan Invoice...",
   "toEmailDefault": "billing@techstart.id"
 }
@@ -1142,7 +1172,7 @@ curl -X POST \
 
 ### Send Invoice Email
 
-**Endpoint:** `POST /api/invoices/:id/send-email`
+**Endpoint:** `POST /api/invoices/:id/send-email` 🔒
 
 **Authentication:** Required
 
@@ -1151,7 +1181,7 @@ curl -X POST \
 Authorization: Bearer <your_jwt_token>
 ```
 
-**Request Body (All Optional):**
+**Request Body:** (all optional)
 ```json
 {
   "toEmail": "custom@email.com",
@@ -1164,36 +1194,43 @@ Authorization: Bearer <your_jwt_token>
 **Description:** Send invoice email with both invoice PDF and tax invoice PDF attachments.
 
 **Requirements:**
-- Invoice status must be `READY_TO_SEND` or `SENT`
+- Invoice status must be READY_TO_SEND or SENT
 - Tax invoice must be uploaded
 - Invoice PDF must exist (auto-generated if missing)
 
 **Behavior:**
 - Attaches invoice PDF
 - Attaches tax invoice PDF(s)
+- Sends from authenticated user's Gmail account
 - Creates EmailLog record
-- Updates invoice status to `SENT`
-- Updates `sentAt` timestamp
-- Sends from the authenticated user's Gmail account
+- Updates invoice status to SENT
+- Sets `sentAt` timestamp
 
 **Response (200 OK):**
 ```json
 {
   "success": true,
-  "messageId": "<gmail-message-id@mail.gmail.com>"
+  "messageId": "<CAAbCdEFg12345@mail.gmail.com>"
 }
 ```
 
 **Error Responses:**
 
-**500 Internal Server Error:** Invalid status
+**401 Unauthorized:**
+```json
+{
+  "error": "No token provided"
+}
+```
+
+**500 Internal Server Error:**
 ```json
 {
   "error": "Invoice status READY_FOR_TAX_INVOICE is not ready to send (needs tax invoice)."
 }
 ```
 
-**500 Internal Server Error:** PDF not found
+**500 Internal Server Error:**
 ```json
 {
   "error": "PDF file not found at /path/to/file.pdf"
@@ -1206,6 +1243,8 @@ Authorization: Bearer <your_jwt_token>
 
 ### Standard Error Response Format
 
+All errors return JSON with an `error` field:
+
 ```json
 {
   "error": "Error message description"
@@ -1214,35 +1253,50 @@ Authorization: Bearer <your_jwt_token>
 
 ### HTTP Status Codes
 
-| Code | Description | Usage |
-|------|-------------|-------|
-| 200 | OK | Successful GET, PUT, DELETE |
-| 201 | Created | Successful POST |
-| 400 | Bad Request | Validation errors, missing required fields |
-| 404 | Not Found | Resource not found |
-| 500 | Internal Server Error | Server-side errors |
-| 502 | Bad Gateway | External service failures (e.g., Gmail API) |
+| Code | Description | Common Usage |
+|------|-------------|--------------|
+| `200` | OK | Successful GET, PUT, DELETE |
+| `201` | Created | Successful POST |
+| `400` | Bad Request | Validation errors, missing required fields |
+| `401` | Unauthorized | Missing authentication token |
+| `403` | Forbidden | Invalid/expired token, insufficient permissions |
+| `404` | Not Found | Resource not found |
+| `500` | Internal Server Error | Server-side errors, database errors, external API failures |
 
 ### Common Error Scenarios
 
-**Missing Required Fields (400):**
+**Missing Authentication:**
 ```json
 {
-  "error": "clientId, periodStart, periodEnd, and taxRate are required"
+  "error": "No token provided"
 }
 ```
 
-**Resource Not Found (404):**
+**Invalid Token:**
+```json
+{
+  "error": "Invalid or expired token"
+}
+```
+
+**Resource Not Found:**
 ```json
 {
   "error": "Product not found"
 }
 ```
 
-**Server Error (500):**
+**Validation Error:**
 ```json
 {
-  "error": "Failed to generate quotation"
+  "error": "clientId, periodStart, periodEnd, and taxRate are required"
+}
+```
+
+**Business Logic Error:**
+```json
+{
+  "error": "Cannot send quotation in status ACCEPTED"
 }
 ```
 
@@ -1250,67 +1304,137 @@ Authorization: Bearer <your_jwt_token>
 
 ## Best Practices
 
-### Date Format
-Always use ISO 8601 date format: `YYYY-MM-DD`
+### 1. Authentication
+- Always include valid JWT token for protected endpoints
+- Store tokens securely (httpOnly cookies or secure storage)
+- Refresh tokens when near expiry
 
-### Pagination
-Currently not implemented. All list endpoints return full results.
+### 2. Date Formats
+- Always use ISO 8601 format for dates: `YYYY-MM-DD`
+- Timestamps are in ISO 8601 with timezone: `YYYY-MM-DDTHH:mm:ss.sssZ`
 
-### Authentication
-Not currently implemented. All endpoints are public.
+### 3. Decimals
+- Send numbers as JSON numbers, not strings
+- System handles precision internally
 
-### Rate Limiting
-Not currently implemented.
+### 4. File Uploads
+- Use `multipart/form-data` content type
+- Field name must be exactly `file`
+- Only PDF files accepted for tax invoices
 
-### CORS
-CORS is enabled for all origins in development mode.
+### 5. Pagination
+- Currently not implemented
+- All list endpoints return full results
+- Filter using query parameters where available
+
+### 6. Rate Limiting
+- Currently not implemented
+- Consider implementing for production use
 
 ---
 
-## Example Workflows
+## Quick Start Guide
 
-### Complete Quotation Generation Workflow
-
+### 1. Setup Products
 ```bash
-# 1. Create FX Rate
-curl -X POST http://localhost:3000/api/fx-rates \
-  -H "Content-Type: application/json" \
-  -d '{"dateEffective":"2025-01-01","usdToIdr":16000,"source":"manual","active":true}'
-
-# 2. Create Product
+# Create a product
 curl -X POST http://localhost:3000/api/products \
   -H "Content-Type: application/json" \
-  -d '{"name":"Google Workspace Flexible","pricingType":"PRORATE","unitName":"license","priceUsd":7.00,"billingCycle":"MONTHLY","active":true}'
+  -d '{
+    "name": "Business Standard (Flex)",
+    "pricingType": "PRORATE",
+    "unitName": "license",
+    "priceUsd": 16.80,
+    "billingCycle": "MONTHLY",
+    "active": true
+  }'
+```
 
-# 3. Create Client
+### 2. Create Client
+```bash
 curl -X POST http://localhost:3000/api/clients \
   -H "Content-Type: application/json" \
-  -d '{"name":"TechStart Indonesia","billingEmail":"billing@techstart.id","status":"ACTIVE"}'
+  -d '{
+    "name": "TechStart Indonesia",
+    "billingEmail": "billing@techstart.id",
+    "paymentTermsDays": 30
+  }'
+```
 
-# 4. Create Subscription (use IDs from steps 2 & 3)
+### 3. Create Subscription
+```bash
 curl -X POST http://localhost:3000/api/subscriptions \
   -H "Content-Type: application/json" \
-  -d '{"clientId":"CLIENT_UUID","productId":"PRODUCT_UUID","status":"ACTIVE","startDate":"2025-01-01","billingAnchorDay":5}'
+  -d '{
+    "clientId": "<client_uuid>",
+    "productId": "<product_uuid>",
+    "status": "ACTIVE",
+    "startDate": "2025-01-01",
+    "billingAnchorDay": 5
+  }'
+```
 
-# 5. Add Usage Data (use subscription ID from step 4)
-curl -X PUT http://localhost:3000/api/subscriptions/SUBSCRIPTION_UUID/usage \
+### 4. Record Usage (for PRORATE products)
+```bash
+curl -X PUT http://localhost:3000/api/subscriptions/<subscription_uuid>/usage \
   -H "Content-Type: application/json" \
-  -d '{"date":"2025-01-05","quantity":70,"source":"api"}'
+  -d '{
+    "date": "2025-01-05",
+    "quantity": 70,
+    "source": "api"
+  }'
+```
 
-# 6. Generate Quotation
+### 5. Generate Quotation
+```bash
 curl -X POST http://localhost:3000/api/quotations/generate \
   -H "Content-Type: application/json" \
-  -d '{"clientId":"CLIENT_UUID","periodStart":"2025-01-01","periodEnd":"2025-01-31","taxRate":0.11}'
+  -d '{
+    "clientId": "<client_uuid>",
+    "periodStart": "2025-01-01",
+    "periodEnd": "2025-01-31",
+    "taxRate": 0.11
+  }'
+```
 
-# 7. Preview Email
-curl http://localhost:3000/api/quotations/QUOTATION_UUID/email-preview
+### 6. Authenticate
+```bash
+# Get OAuth URL
+curl http://localhost:3000/api/auth/google/url
 
-# 8. Send Email
-curl -X POST http://localhost:3000/api/quotations/QUOTATION_UUID/send-email \
-  -H "Content-Type: application/json" \
-  -d '{}'
+# After Google auth, you'll receive a token
+# Use it for protected endpoints
+```
+
+### 7. Send Quotation
+```bash
+curl -X POST http://localhost:3000/api/quotations/<quotation_uuid>/send-email \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json"
+```
+
+### 8. Accept Quotation & Create Invoice
+```bash
+curl -X POST http://localhost:3000/api/quotations/<quotation_uuid>/accept \
+  -H "Authorization: Bearer <your_token>"
+```
+
+### 9. Upload Tax Invoice
+```bash
+curl -X POST http://localhost:3000/api/invoices/<invoice_uuid>/tax-invoice \
+  -H "Authorization: Bearer <your_token>" \
+  -F "file=@tax-invoice.pdf"
+```
+
+### 10. Send Invoice
+```bash
+curl -X POST http://localhost:3000/api/invoices/<invoice_uuid>/send-email \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json"
 ```
 
 ---
 
-**For support or questions, contact the GITS Cloud Billing team.**
+**End of API Documentation**
+
+For questions or issues, contact the GITS Cloud Billing team.

@@ -1,81 +1,85 @@
 # GITS Cloud Billing
 
-A comprehensive backend system for managing cloud service billing, subscriptions, and quotations with automated PDF generation and email delivery.
+A comprehensive TypeScript-based backend system for managing cloud service billing, subscriptions, quotations, and invoices with Google OAuth2 authentication, automated PDF generation, and email delivery via Gmail API.
 
 ## Overview
 
-GITS Cloud Billing is a TypeScript-based backend application designed to handle complex billing scenarios for B2B cloud services. It supports multiple pricing models (fixed, prorated, and percentage-based), currency conversion, tax calculation, quotation generation, and automated email delivery via Gmail.
+GITS Cloud Billing is designed to handle complex B2B billing scenarios for cloud services (specifically Google Workspace products). It features multiple pricing models, automated quotation-to-invoice workflows, tax invoice management, currency conversion, and per-user email sending through authenticated Gmail accounts.
 
-## Features
+## ✨ Key Features
 
-### ✨ Core Features
+### 🔐 Authentication & Authorization
+- **Google OAuth2 Integration** - Secure login via Google accounts
+- **JWT Session Management** - Stateless authentication with JSON Web Tokens
+- **Per-User Email Sending** - Each user sends emails from their own Gmail account
+- **Role-Based Access** - ADMIN and FINANCE user roles
+- **Protected Endpoints** - Auth middleware for sensitive operations
 
-- **Google OAuth2 Authentication**
-  - Secure user login via Google
-  - JWT-based session management
-  - Per-user email sending with user's Gmail account
-  - Role-based access (ADMIN, FINANCE)
+### 💰 Multi-Model Pricing Engine
+- **FIXED** - Standard fixed price per billing cycle
+- **PRORATE** - Daily usage-based calculation (`Σ(daily_quantity × (monthly_price / 30))`)
+- **PERCENTAGE** - Percentage-based fees calculated on subtotal
+- **Precise Rounding** - USD: ceil to cents, IDR: ceil to rupiah
 
-- **Multi-Model Pricing Engine**
-  - Fixed pricing for standard subscriptions
-  - Prorated pricing based on daily usage
-  - Percentage-based fees (e.g., management fees)
-  - Precise rounding rules (USD: ceil to cents, IDR: ceil to rupiah)
+### 📋 Quotation Management
+- **Automated Generation** - Calculate billing from subscriptions and usage
+- **Professional PDF** - Auto-generated PDFs with company branding
+- **Email Delivery** - Send via authenticated user's Gmail with PDF attachment
+- **Preview Mode** - Preview email content before sending
+- **Accept/Deny Workflow** - Quotations can be accepted (creates invoice) or denied
+- **Status Tracking** - DRAFT → SENT → ACCEPTED/DENIED/EXPIRED
 
-- **Quotation Management**
-  - Automated quotation generation from billing calculations
-  - Professional PDF generation with company branding
-  - Email delivery with PDF attachments via Gmail API
-  - Preview mode before sending
-  - Accept/Deny quotation workflow
-  - Automatic invoice creation on acceptance
+### 🧾 Invoice Management
+- **Auto-Creation** - Invoices generated automatically from accepted quotations
+- **Professional PDFs** - Invoice PDFs with line items, taxes, and due dates
+- **Tax Invoice Upload** - Upload Tax Invoice (Faktur Pajak) PDFs via multipart/form-data
+- **Dual-PDF Emails** - Send both invoice and tax invoice in one email
+- **Status Flow** - READY_FOR_TAX_INVOICE → READY_TO_SEND → SENT → PAID
+- **Due Date Calculation** - Based on client payment terms (default 30 days)
 
-- **Invoice Management**
-  - Auto-generate invoices from accepted quotations
-  - Professional PDF generation
-  - Tax invoice (faktur pajak) upload support
-  - Email delivery with both invoice and tax invoice PDFs
-  - Status tracking (READY_FOR_TAX_INVOICE → READY_TO_SEND → SENT)
+### 📊 Subscription & Usage Tracking
+- **Multi-Client Management** - Manage subscriptions across multiple clients
+- **Daily Usage Recording** - Track daily usage for prorated billing
+- **Flexible Billing Anchors** - Custom billing anchor days per subscription
+- **Usage Sources** - Manual, CSV import, or API
 
-- **Subscription & Usage Tracking**
-  - Multi-client subscription management
-  - Daily usage recording and aggregation
-  - Flexible billing anchor dates
-  - Support for various billing cycles
+### 💱 FX Rate Management
+- **Dynamic USD to IDR Conversion** - Date-effective exchange rates
+- **Auto-Deactivation** - Automatically deactivates previous rates
+- **Manual or API Sources** - Track rate origin
 
-- **FX Rate Management**
-  - Dynamic USD to IDR conversion
-  - Auto-deactivation of previous rates
-  - Date-effective rate management
+### 📧 Email System
+- **Gmail API Integration** - OAuth2-authenticated email sending
+- **Per-User Sending** - Uses logged-in user's Gmail account
+- **Email Logging** - Audit trail of all sent emails
+- **PDF Attachments** - Attach quotations, invoices, and tax invoices
 
-- **Comprehensive API**
-  - RESTful endpoints for all core entities
-  - CRUD operations for products, clients, subscriptions
-  - Usage tracking and reporting
-  - Quotation and invoice workflows
-  - Protected endpoints requiring authentication
+## 🛠️ Tech Stack
 
-## Tech Stack
+| Component | Technology |
+|-----------|------------|
+| Runtime | Node.js v20+ |
+| Language | TypeScript |
+| Framework | Express.js |
+| Database | PostgreSQL |
+| ORM | Prisma |
+| PDF Generation | PDFKit |
+| Email | Gmail API (googleapis) + Nodemailer |
+| Authentication | Google OAuth2 + JWT |
+| File Upload | Multer |
+| Development | ts-node-dev |
 
-- **Runtime**: Node.js (v20+)
-- **Language**: TypeScript
-- **Framework**: Express.js
-- **Database**: PostgreSQL (via Prisma ORM)
-- **PDF Generation**: PDFKit
-- **Email**: Gmail API (via googleapis) + Nodemailer
-- **Development**: ts-node-dev
-- **Package Manager**: npm
+## 📋 Prerequisites
 
-## Prerequisites
+- **Node.js** v20 or higher
+- **PostgreSQL** database
+- **Google Cloud Project** with Gmail API enabled
+- **OAuth2 Credentials** (Client ID, Client Secret, Redirect URI)
+- **Docker** (optional, for local PostgreSQL)
 
-- Node.js v20 or higher
-- PostgreSQL database
-- Gmail OAuth2 credentials (for email features)
-- Docker & Docker Compose (optional, for local database)
+## 🚀 Installation
 
-## Installation
-
-### 1. Clone the Repository
+### 1. Clone Repository
 
 ```bash
 git clone <repository-url>
@@ -90,7 +94,7 @@ npm install
 
 ### 3. Environment Configuration
 
-Create a `.env` file in the root directory:
+Create `.env` file in the root directory:
 
 ```env
 # Database
@@ -99,26 +103,26 @@ DATABASE_URL="postgresql://user:password@localhost:5432/gits_billing"
 # Server
 PORT=3000
 
-# Google OAuth2 (for user authentication and email)
+# Google OAuth2 (for authentication and email)
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 
-# JWT Secret (for session management)
-JWT_SECRET=your_random_secret_key_here
+# JWT Secret (use a strong random string)
+JWT_SECRET=your_very_secret_random_key_here
 ```
 
 ### 4. Database Setup
 
-#### Option A: Using Docker Compose
+#### Option A: Using Docker
 
 ```bash
 npm run db:up
 ```
 
-#### Option B: Manual PostgreSQL Setup
+#### Option B: Manual PostgreSQL
 
-Ensure PostgreSQL is running and accessible at the `DATABASE_URL` specified in your `.env` file.
+Ensure PostgreSQL is running and accessible at your `DATABASE_URL`.
 
 ### 5. Run Migrations
 
@@ -127,7 +131,15 @@ npm run prisma:migrate
 npm run prisma:generate
 ```
 
-## Running the Application
+### 6. Seed Products (Optional)
+
+Load Google Workspace product catalog:
+
+```bash
+# See SETUP-PRODUCTS.md for complete product setup scripts
+```
+
+## 🏃 Running the Application
 
 ### Development Mode
 
@@ -135,7 +147,7 @@ npm run prisma:generate
 npm run dev
 ```
 
-The server will start on `http://localhost:3000` (or your configured PORT).
+Server starts on `http://localhost:3000`
 
 ### Production Build
 
@@ -144,7 +156,7 @@ npm run build
 npm start
 ```
 
-## API Documentation
+## 📚 API Documentation
 
 ### Base URL
 
@@ -152,253 +164,285 @@ npm start
 http://localhost:3000/api
 ```
 
-### Endpoints
+### Quick Reference
 
-#### Authentication
+| Category | Endpoints | Auth Required |
+|----------|-----------|---------------|
+| **Auth** | 3 endpoints | Partial |
+| **Products** | 5 endpoints | No |
+| **Clients** | 6 endpoints | No |
+| **Subscriptions** | 7 endpoints | No |
+| **FX Rates** | 3 endpoints | No |
+| **Quotations** | 6 endpoints | Partial (3/6) |
+| **Invoices** | 5 endpoints | Yes (all) |
 
-- `GET /api/auth/google/url` - Get Google OAuth2 login URL
-- `GET /api/auth/google/callback` - Google OAuth2 callback (returns JWT)
-- `GET /api/auth/me` - Get current user info (requires authentication)
+See **[API.md](./API.md)** for complete endpoint documentation.
 
-#### Products
+### Authentication Flow
 
-- `GET /api/products` - List all products
-- `GET /api/products/:id` - Get product by ID
-- `POST /api/products` - Create new product
-- `PUT /api/products/:id` - Update product
-- `DELETE /api/products/:id` - Delete product
+1. **Get OAuth URL**: `GET /api/auth/google/url`
+2. **Redirect User**: User authenticates with Google
+3. **Handle Callback**: `GET /api/auth/google/callback?code=...`
+4. **Store JWT Token**: Frontend stores returned token
+5. **Use Token**: Add `Authorization: Bearer <token>` header to requests
 
-#### Clients
+### Protected Endpoints (Require Auth)
 
-- `GET /api/clients` - List all clients
-- `GET /api/clients/:id` - Get client by ID
-- `POST /api/clients` - Create new client
-- `PUT /api/clients/:id` - Update client
-- `DELETE /api/clients/:id` - Delete client
+- All `/api/invoices/*` endpoints
+- `POST /api/quotations/:id/accept`
+- `POST /api/quotations/:id/deny`
+- `POST /api/quotations/:id/send-email`
+- `GET /api/auth/me`
 
-#### Subscriptions
-
-- `GET /api/clients/:clientId/subscriptions` - List client subscriptions
-- `GET /api/subscriptions/:id` - Get subscription by ID
-- `POST /api/subscriptions` - Create new subscription
-- `PUT /api/subscriptions/:id` - Update subscription
-- `DELETE /api/subscriptions/:id` - Delete subscription
-
-#### Usage Daily
-
-- `GET /api/subscriptions/:subscriptionId/usage` - Get usage records
-- `PUT /api/subscriptions/:subscriptionId/usage` - Upsert usage record
-- `DELETE /api/subscriptions/:subscriptionId/usage` - Delete usage records
-
-#### FX Rates
-
-- `GET /api/fx-rates/active` - Get active FX rate
-- `GET /api/fx-rates` - Get FX rate by date
-- `POST /api/fx-rates` - Create new FX rate
-
-#### Quotations
-
-- `POST /api/quotations/generate` - Generate new quotation
-  ```json
-  {
-    "clientId": "uuid",
-    "periodStart": "2025-01-01",
-    "periodEnd": "2025-01-31",
-    "fxRateUsdToIdr": 16000,  // optional
-    "taxRate": 0.11
-  }
-  ```
-
-- `GET /api/quotations/:id` - Get quotation details
-- `GET /api/quotations/:id/email-preview` - Preview email content
-- `POST /api/quotations/:id/accept` - Accept quotation (creates invoice) 🔒
-- `POST /api/quotations/:id/deny` - Deny quotation 🔒
-- `POST /api/quotations/:id/send-email` - Send quotation via email 🔒
-  ```json
-  {
-    "toEmail": "client@example.com",  // optional override
-    "subject": "custom subject",       // optional override
-    "htmlBody": "<p>custom html</p>",  // optional override
-    "textBody": "custom text"          // optional override
-  }
-  ```
-
-#### Invoices
-
-- `GET /api/invoices` - List invoices (filter by `?status=READY_FOR_TAX_INVOICE`) 🔒
-- `GET /api/invoices/:id` - Get invoice details 🔒
-- `POST /api/invoices/:id/tax-invoice` - Upload tax invoice PDF (multipart/form-data with `file` field) 🔒
-- `GET /api/invoices/:id/email-preview` - Preview invoice email 🔒
-- `POST /api/invoices/:id/send-email` - Send invoice + tax invoice via email 🔒
-
-🔒 = Requires authentication (Bearer token in Authorization header)
-
-### Health Check
-
-- `GET /health` - Server health status
-
-## Project Structure
+## 📁 Project Structure
 
 ```
 GITSCloudBilling/
 ├── prisma/
-│   ├── schema.prisma          # Database schema
-│   └── migrations/            # Database migrations
+│   ├── schema.prisma              # 14 database models
+│   └── migrations/                # Database migrations
 ├── src/
-│   ├── controllers/           # Request handlers
+│   ├── config/
+│   │   └── env.ts                 # Environment variables
+│   ├── controllers/               # Request handlers (7 controllers)
 │   │   ├── productController.ts
 │   │   ├── clientController.ts
 │   │   ├── subscriptionController.ts
 │   │   ├── usageDailyController.ts
 │   │   ├── fxRateController.ts
-│   │   └── quotationController.ts
-│   ├── repositories/          # Data access layer
+│   │   ├── quotationController.ts
+│   │   └── invoiceController.ts
+│   ├── middleware/
+│   │   └── authMiddleware.ts      # JWT verification
+│   ├── repositories/              # Data access layer (6 repos)
 │   │   ├── productRepository.ts
 │   │   ├── clientRepository.ts
 │   │   ├── subscriptionRepository.ts
 │   │   ├── usageDailyRepository.ts
-│   │   └── fxRateRepository.ts
-│   ├── routes/                # API route definitions
+│   │   ├── fxRateRepository.ts
+│   │   └── index.ts
+│   ├── routes/                    # API routes (8 route files)
+│   │   ├── authRoutes.ts
 │   │   ├── productRoutes.ts
 │   │   ├── clientRoutes.ts
 │   │   ├── subscriptionRoutes.ts
 │   │   ├── usageDailyRoutes.ts
 │   │   ├── fxRateRoutes.ts
-│   │   └── quotationRoutes.ts
-│   ├── services/              # Business logic
-│   │   ├── billingEngine.ts        # Core pricing calculations
-│   │   ├── billingEngine.test.ts   # Billing engine tests
-│   │   ├── pdfService.ts           # PDF generation
-│   │   ├── quotationService.ts     # Quotation orchestration
-│   │   └── emailService.ts         # Email delivery
+│   │   ├── quotationRoutes.ts
+│   │   └── invoiceRoutes.ts
+│   ├── services/                  # Business logic (7 services)
+│   │   ├── billingEngine.ts       # Core pricing calculations
+│   │   ├── quotationService.ts    # Quotation workflow
+│   │   ├── invoiceService.ts      # Invoice workflow
+│   │   ├── pdfService.ts          # PDF generation
+│   │   ├── emailService.ts        # Gmail integration
+│   │   ├── googleAuthService.ts   # OAuth2 handling
+│   │   └── billingEngine.test.ts  # Unit tests
 │   ├── prisma/
-│   │   └── client.ts          # Prisma client instance
-│   └── server.ts              # Express app setup
-├── storage/
-│   └── quotations/            # Generated PDF files
-├── .env                       # Environment variables
+│   │   └── client.ts              # Prisma client instance
+│   └── server.ts                  # Express app entry point
+├── storage/                       # Generated files
+│   ├── quotations/                # Quotation PDFs
+│   ├── invoices/                  # Invoice PDFs
+│   └── tax-invoices/              # Uploaded tax invoices
+├── .env                           # Environment variables
+├── .env.example                   # Environment template
+├── docker-compose.yml             # PostgreSQL container
 ├── package.json
 ├── tsconfig.json
-└── README.md
+├── API.md                         # Complete API documentation
+├── README.md                      # This file
+└── SETUP-PRODUCTS.md              # Google Workspace product catalog setup
 ```
 
-## Key Concepts
+## 🗄️ Database Models
+
+| Model | Description |
+|-------|-------------|
+| `User` | System users with Google OAuth + JWT |
+| `Product` | Service catalog (Google Workspace products) |
+| `Client` | B2B customers with billing details |
+| `Subscription` | Client-product relationships |
+| `UsageDaily` | Daily usage tracking for prorated billing |
+| `FxRate` | USD to IDR exchange rates |
+| `Quotation` | Generated quotations with line items |
+| `QuotationLine` | Individual line items in quotations |
+| `Invoice` | Generated invoices from accepted quotations |
+| `InvoiceLine` | Individual line items in invoices |
+| `TaxInvoice` | Uploaded tax invoice (faktur pajak) PDFs |
+| `Payment` | Payment records (future use) |
+| `EmailLog` | Audit trail of sent emails |
+
+## 🔄 Typical Workflows
+
+### Quotation to Invoice Flow
+
+1. **Setup**:
+   - Create Products (see SETUP-PRODUCTS.md)
+   - Create Client
+   - Create Subscriptions
+   - Record Usage (for prorated products)
+
+2. **Generate Quotation**: `POST /api/quotations/generate`
+   - Calculates billing from subscriptions and usage
+   - Generates PDF automatically
+   - Status: DRAFT
+
+3. **Send Quotation**: `POST /api/quotations/:id/send-email` 🔒
+   - Requires authentication
+   - Sends from user's Gmail
+   - Status: DRAFT → SENT
+
+4. **Accept Quotation**: `POST /api/quotations/:id/accept` 🔒
+   - Creates Invoice automatically
+   - Generates Invoice PDF
+   - Status: SENT → ACCEPTED
+
+5. **Upload Tax Invoice**: `POST /api/invoices/:id/tax-invoice` 🔒
+   - Upload faktur pajak PDF
+   - Invoice status: READY_FOR_TAX_INVOICE → READY_TO_SEND
+
+6. **Send Invoice**: `POST /api/invoices/:id/send-email` 🔒
+   - Sends both invoice + tax invoice PDFs
+   - Invoice status: READY_TO_SEND → SENT
+
+## 💡 Key Concepts
 
 ### Billing Engine
 
-The billing engine (`src/services/billingEngine.ts`) implements three pricing models:
+Three pricing models implemented in `billingEngine.ts`:
 
-1. **FIXED**: `price × quantity` (full month charge)
-2. **PRORATE**: Daily usage-based calculation with 30-day divisor
-   - Formula: `Σ(daily_quantity × (monthly_price / 30))`
-   - Rounds up to USD cents after aggregation
-3. **PERCENTAGE**: Calculated on subtotal of non-percentage lines
-   - Formula: `subtotal × percentage_rate`
-
-**Rounding Rules:**
-- USD amounts: Always round UP to 2 decimal places
-- IDR amounts: Always round UP to nearest integer
-
-### Quotation Workflow
-
-1. **Generate**: Calculate billing amounts → Create quotation record → Generate PDF
-2. **Preview**: Fetch quotation → Build email template → Return preview
-3. **Send**: Attach PDF → Send via Gmail API → Log email → Update status to SENT
-
-### Database Schema
-
-Key entities:
-- **Product**: Service definitions with pricing types
-- **Client**: Customer information (with support for multiple aliases)
-- **Subscription**: Client-product relationships
-- **UsageDaily**: Daily usage metrics for prorated billing
-- **FxRate**: Currency conversion rates
-- **Quotation**: Generated quotations with lines
-- **EmailLog**: Audit trail for sent emails
-
-## Development
-
-### Available Scripts
-
-```bash
-# Development server with auto-reload
-npm run dev
-
-# Build TypeScript to JavaScript
-npm run build
-
-# Run production server
-npm start
-
-# Database commands
-npm run db:up          # Start PostgreSQL (Docker)
-npm run db:down        # Stop PostgreSQL (Docker)
-npm run db:logs        # View PostgreSQL logs
-
-# Prisma commands
-npm run prisma:migrate # Run database migrations
-npm run prisma:generate # Generate Prisma client
+**1. FIXED**
+```
+amount = price × quantity
 ```
 
-### Running Tests
+**2. PRORATE**
+```
+amount = Σ(daily_quantity × (monthly_price / 30))
+```
+- Aggregates usage across period
+- Rounds UP to USD cents after aggregation
+
+**3. PERCENTAGE**
+```
+amount = subtotal_of_other_lines × percentage_rate
+```
+- Applied after other line items calculated
+
+### Rounding Rules
+- **USD**: Always round UP to 2 decimal places (cents)
+- **IDR**: Always round UP to nearest integer (rupiah)
+
+### FX Rate Resolution
+1. Use custom rate if provided in request
+2. Otherwise use active FX rate from database
+3. Error if no rate available
+
+### Invoice Numbering
+- Format: `INV-YYYYMMDD-XXXX`
+- `XXXX` = 4-character random hex
+
+### Quotation Numbering
+- Format: `Q-YYYYMMDD-XXXX`
+- `XXXX` = 4-character random hex
+
+## 🔧 Available Scripts
 
 ```bash
-# Run billing engine tests
+# Development
+npm run dev                  # Start dev server with hot reload
+
+# Production
+npm run build                # Compile TypeScript
+npm start                    # Run production server
+
+# Database
+npm run db:up                # Start PostgreSQL (Docker)
+npm run db:down              # Stop PostgreSQL
+npm run db:logs              # View PostgreSQL logs
+
+# Prisma
+npm run prisma:migrate       # Run migrations
+npm run prisma:generate      # Generate Prisma client
+```
+
+## 🔐 Google OAuth2 Setup
+
+1. **Create Google Cloud Project**: [console.cloud.google.com](https://console.cloud.google.com/)
+2. **Enable Gmail API**: In APIs & Services
+3. **Create OAuth2 Credentials**:
+   - Application type: Web application
+   - Authorized redirect URIs: `http://localhost:3000/api/auth/google/callback`
+4. **Add to `.env`**:
+   ```env
+   GOOGLE_CLIENT_ID=your_client_id
+   GOOGLE_CLIENT_SECRET=your_client_secret
+   GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+   ```
+
+## 📊 Static File Serving
+
+PDF files are served statically:
+
+- **Quotations**: `http://localhost:3000/storage/quotations/<filename>.pdf`
+- **Invoices**: `http://localhost:3000/storage/invoices/<filename>.pdf`
+- **Tax Invoices**: `http://localhost:3000/storage/tax-invoices/<filename>.pdf`
+
+## ⚠️ Error Handling
+
+Standard HTTP status codes:
+
+| Code | Description |
+|------|-------------|
+| 200 | Success (GET, PUT, DELETE) |
+| 201 | Created (POST) |
+| 400 | Bad Request (validation errors) |
+| 401 | Unauthorized (missing/invalid token) |
+| 403 | Forbidden (insufficient permissions) |
+| 404 | Not Found |
+| 500 | Internal Server Error |
+
+## 🧪 Testing
+
+```bash
+# Run billing engine unit tests
 npx ts-node src/services/billingEngine.test.ts
 ```
 
-### Database Migrations
+## 🌟 Features Implemented
 
-Create a new migration:
+- ✅ Google OAuth2 authentication
+- ✅ JWT session management
+- ✅ Multi-model pricing engine (FIXED, PRORATE, PERCENTAGE)
+- ✅ Quotation generation with PDF
+- ✅ Quotation email sending (per-user Gmail)
+- ✅ Quotation accept/deny workflow
+- ✅ Automatic invoice creation
+- ✅ Invoice PDF generation
+- ✅ Tax invoice upload
+- ✅ Invoice email with dual PDFs
+- ✅ FX rate management
+- ✅ Usage tracking
+- ✅ Email audit logging
+- ✅ Protected endpoints
 
-```bash
-npx prisma migrate dev --name description_of_change
-```
+## 🚧 Future Enhancements
 
-## Gmail API Setup
-
-To enable email features:
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project or select an existing one
-3. Enable Gmail API
-4. Create OAuth2 credentials
-5. Use [OAuth2 Playground](https://developers.google.com/oauthplayground) to get refresh token
-6. Add credentials to `.env` file
-
-## Error Handling
-
-The API returns standard HTTP status codes:
-
-- `200` - Success
-- `201` - Created
-- `400` - Bad Request (validation errors)
-- `404` - Not Found
-- `500` - Internal Server Error
-- `502` - Bad Gateway (external service failures, e.g., Gmail API)
-
-## Static File Serving
-
-PDF files are served statically at:
-
-```
-http://localhost:3000/storage/quotations/<filename>.pdf
-```
-
-## Future Enhancements
-
-- [x] Authentication & Authorization (Google OAuth2 + JWT) ✅
-- [x] Invoice generation from quotations ✅
-- [x] Per-user email sending via Gmail ✅
-- [ ] Payment tracking
-- [ ] Dashboard & reporting
-- [ ] Email templates customization
-- [ ] Webhook support for automated usage ingestion
+- [ ] Payment tracking and reconciliation
+- [ ] Dashboard & analytics
+- [ ] Email template customization
+- [ ] Webhook support for usage ingestion
 - [ ] Multi-currency support beyond USD/IDR
 - [ ] Frontend application
-- [ ] Automated payment reconciliation
+- [ ] Automated reminders for overdue invoices
+- [ ] Batch operations
 
-## Contributing
+## 📝 License
+
+[Your License Here]
+
+## 🤝 Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -406,10 +450,6 @@ http://localhost:3000/storage/quotations/<filename>.pdf
 4. Push to the branch
 5. Create a Pull Request
 
-## License
+## 📧 Support
 
-[Your License Here]
-
-## Support
-
-For questions or issues, please contact the GITS Cloud Billing team.
+For questions or issues, contact the GITS Cloud Billing team.

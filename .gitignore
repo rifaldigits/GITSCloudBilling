@@ -19,6 +19,8 @@ prisma/dev.db-journal
 
 # Storage (generated files)
 storage/quotations/*.pdf
+storage/invoices/*.pdf
+storage/tax-invoices/*.pdf
 
 # IDE
 .vscode/
@@ -29,6 +31,9 @@ storage/quotations/*.pdf
 
 # OS
 .DS_Store
+
+# Planning artifacts
+brain/
 Thumbs.db
 
 # Logs
