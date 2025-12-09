@@ -27,10 +27,17 @@ export const getSubscriptionById = async (req: Request, res: Response) => {
 
 export const createSubscription = async (req: Request, res: Response) => {
     try {
-        // Need to parse dates manually if they come as strings, but prisma might handle ISO strings.
-        // Let's assume body is mostly correct but ensure dates are Date objects if needed?
-        // Actually Prisma client handles ISO strings for DateTime fields usually.
-        const subscription = await subscriptionRepo.createSubscription(req.body);
+        const data: any = { ...req.body };
+
+        // Convert date strings to Date objects
+        if (data.startDate) {
+            data.startDate = new Date(data.startDate);
+        }
+        if (data.endDate) {
+            data.endDate = new Date(data.endDate);
+        }
+
+        const subscription = await subscriptionRepo.createSubscription(data);
         res.status(201).json(subscription);
     } catch (error) {
         console.error(error);
@@ -41,7 +48,17 @@ export const createSubscription = async (req: Request, res: Response) => {
 export const updateSubscription = async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
-        const subscription = await subscriptionRepo.updateSubscription(id, req.body);
+        const data: any = { ...req.body };
+
+        // Convert date strings to Date objects
+        if (data.startDate) {
+            data.startDate = new Date(data.startDate);
+        }
+        if (data.endDate) {
+            data.endDate = new Date(data.endDate);
+        }
+
+        const subscription = await subscriptionRepo.updateSubscription(id, data);
         res.json(subscription);
     } catch (error) {
         res.status(400).json({ error: 'Failed to update subscription' });

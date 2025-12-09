@@ -1,4 +1,5 @@
 import prisma from '../prisma/client';
+import * as invoiceService from './invoiceService';
 import { Prisma, Quotation, PricingType } from '@prisma/client';
 import * as billingEngine from './billingEngine';
 import * as pdfService from './pdfService';
@@ -10,7 +11,7 @@ import fs from 'fs';
 
 interface CreateQuotationParams {
     clientId: string;
-    periodStart: string | Date; // Allow string from API
+    periodStart: string | Date;
     periodEnd: string | Date;
     fxRateUsdToIdr?: number;
     taxRate: number;
@@ -46,7 +47,6 @@ export async function createQuotationForClientPeriod(params: CreateQuotationPara
     const quoteNumber = `Q-${dateStr}-${randomSuffix}`;
 
     // 4. Persist Quotation & Lines
-    // We use a transaction to ensure integrity
     const quotation = await prisma.$transaction(async (tx) => {
         const createdQuot = await tx.quotation.create({
             data: {
@@ -66,23 +66,11 @@ export async function createQuotationForClientPeriod(params: CreateQuotationPara
                         subscriptionId: line.subscriptionId,
                         productNameSnapshot: line.productName,
                         pricingTypeSnapshot: line.pricingType as PricingType,
-                        unitNameSnapshot: 'unit', // TODO: Fetch from product if needed, or BillingLineResult should include it?
-                        // Schema requires unitNameSnapshot. BillingLineResult doesn't have it currently.
-                        // I should verify BillingLineResult or fetch it.
-                        // For now, I'll update BillingLineResult type or fetch it here? 
-                        // Simpler: Just put "unit" or modify Billing Engine to return it.
-                        // Wait, previous Billing Engine step defined BillingLineResult with: subscriptionId, productName, pricingType, quantityTotal...
-                        // It DOES NOT have unitName.
-                        // I will hack it here: fetch subscription product or just generic "unit" if I can't easily modify engine now.
-                        // Actually, I can access `line.quantityTotal` but unit name depends on product.
-                        // Let's modify Billing Engine slightly? Or just assumption.
-                        // The user said "use billingEngine...".
-                        // I'll update Billing Engine slightly in a next step if strictly needed, or just standard "unit".
-                        // Let's use "unit" for now to avoid side-tracking, or revisit if critical.
-                        periodStart, // Line period might differ if I implemented partial lines correctly, but engine returns aggregated lines per sub.
-                        periodEnd,
+                        unitNameSnapshot: 'unit',
+                        periodStart: periodStart,
+                        periodEnd: periodEnd,
                         quantityTotal: line.quantityTotal,
-                        unitPriceUsd: line.amountUsd.div(line.quantityTotal || 1), // Approximate unit price if aggregated
+                        unitPriceUsd: line.amountUsd.div(line.quantityTotal || 1),
                         amountUsd: line.amountUsd,
                         amountIdr: line.amountIdr
                     }))
@@ -103,7 +91,7 @@ export async function createQuotationForClientPeriod(params: CreateQuotationPara
     const finalQuotation = await prisma.quotation.update({
         where: { id: quotation.id },
         data: { pdfPath },
-        include: { lines: true } // Return full object
+        include: { lines: true }
     });
 
     return finalQuotation;
@@ -135,7 +123,7 @@ export async function getQuotationForPreview(id: string) {
     };
 }
 
-export async function sendQuotationEmail(id: string, overrides?: {
+export async function sendQuotationEmail(id: string, currentUserId: string, overrides?: {
     toEmail?: string;
     subject?: string;
     htmlBody?: string;
@@ -164,25 +152,20 @@ export async function sendQuotationEmail(id: string, overrides?: {
     let pdfPath = quotation.pdfPath;
     if (!pdfPath) {
         // Regenerate if missing
-        // Verify if we have lines? Quotation object here only has client included.
-        // Needs lines to generate PDF.
         const fullQuot = await prisma.quotation.findUnique({ where: { id }, include: { lines: true, client: true } });
         pdfPath = await pdfService.generateQuotationPdf(fullQuot!);
         // Update DB
         await prisma.quotation.update({ where: { id }, data: { pdfPath } });
     }
 
-    // Resolve absolute path for attachment
-    // stored as 'storage/quotations/...'
+    // Resolve absolute path
     const absolutePath = path.resolve(process.cwd(), pdfPath);
     if (!fs.existsSync(absolutePath)) {
-        // Try regenerate again if file missing on disk but path exists in DB?
-        // For simplicity, throw or regenerate.
         throw new Error(`PDF file not found at ${absolutePath}`);
     }
 
-    // 4. Send Email
-    const result = await emailService.sendEmail({
+    // 4. Send Email as User
+    const result = await emailService.sendEmailAsUser(currentUserId, {
         to: toEmail,
         subject,
         htmlBody,
@@ -216,4 +199,35 @@ export async function sendQuotationEmail(id: string, overrides?: {
     });
 
     return updatedQuotation;
+}
+
+export async function setQuotationStatus(id: string, status: 'ACCEPTED' | 'DENIED') {
+    const quotation = await prisma.quotation.findUnique({
+        where: { id },
+        include: { lines: true }
+    });
+
+    if (!quotation) throw new Error('Quotation not found');
+
+    if (quotation.status === 'ACCEPTED' || quotation.status === 'DENIED') {
+        throw new Error(`Quotation is already ${quotation.status}`);
+    }
+
+    // Allow transition from DRAFT or SENT
+
+    const updated = await prisma.quotation.update({
+        where: { id },
+        data: {
+            status,
+            acceptedAt: status === 'ACCEPTED' ? new Date() : undefined,
+            deniedAt: status === 'DENIED' ? new Date() : undefined
+        }
+    });
+
+    if (status === 'ACCEPTED') {
+        const fullQuot = await prisma.quotation.findUnique({ where: { id }, include: { lines: true } });
+        await invoiceService.createInvoiceFromQuotation(fullQuot);
+    }
+
+    return updated;
 }

@@ -80,6 +80,7 @@ model Client {
   id               String       @id @default(uuid())
   name             String
   legalName        String?
+  aliases          String[]     @default([])
   billingEmail     String
   financeEmail     String?
   taxId            String? // NPWP
@@ -273,11 +274,22 @@ model EmailLog {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String
-  role         UserRole
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String?
+  role         UserRole  @default(ADMIN)
+  passwordHash String?   // Made optional for backward compatibility or removal
+  
+  // Google OAuth fields
+  googleId     String?   @unique
+  googleEmail  String?
+  pictureUrl   String?
+  
+  // Gmail API tokens
+  accessToken  String?
+  refreshToken String?
+  tokenExpiry  DateTime?
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }

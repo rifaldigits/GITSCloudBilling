@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
 import { Quotation, QuotationLine, Client } from '@prisma/client';
+import prisma from '../prisma/client';
 
 export async function generateQuotationPdf(quotation: Quotation & { client: Client; lines: QuotationLine[] }): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -74,7 +75,6 @@ export async function generateQuotationPdf(quotation: Quotation & { client: Clie
         doc.font('Helvetica');
 
         for (const line of quotation.lines) {
-            // Check page break
             if (currentY > 700) {
                 doc.addPage();
                 currentY = 50;
@@ -128,4 +128,132 @@ export async function generateQuotationPdf(quotation: Quotation & { client: Clie
             reject(err);
         });
     });
+}
+
+export async function generateInvoicePdf(invoiceId: string): Promise<string> {
+    const invoice = await prisma.invoice.findUnique({
+        where: { id: invoiceId },
+        include: {
+            client: true,
+            lines: true
+        }
+    });
+
+    if (!invoice) {
+        throw new Error('Invoice not found');
+    }
+
+    const storageDir = path.join(process.cwd(), 'storage', 'invoices');
+    if (!fs.existsSync(storageDir)) {
+        fs.mkdirSync(storageDir, { recursive: true });
+    }
+
+    const filename = `${invoice.invoiceNumber}.pdf`;
+    const filePath = path.join(storageDir, filename);
+
+    const doc = new PDFDocument({ margin: 50 });
+    const stream = fs.createWriteStream(filePath);
+    doc.pipe(stream);
+
+    const formatDate = (date: Date) => date.toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric'
+    });
+
+    const formatCurrency = (value: any) => {
+        const num = typeof value === 'number' ? value : Number(value);
+        return `Rp ${num.toLocaleString('id-ID', { maximumFractionDigits: 0 })}`;
+    };
+
+    // Header
+    doc.fontSize(20).text('INVOICE', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text('GITS Cloud Billing', { align: 'center' });
+    doc.moveDown(1.5);
+
+    const startY = doc.y;
+
+    // Invoice Details
+    doc.fontSize(10);
+    doc.text(`Invoice Number: ${invoice.invoiceNumber}`, 50, startY);
+    doc.text(`Invoice Date: ${formatDate(invoice.createdAt)}`, 50, startY + 15);
+    doc.text(`Due Date: ${formatDate(invoice.dueDate)}`, 50, startY + 30);
+    doc.text(`Period: ${formatDate(invoice.periodStart)} - ${formatDate(invoice.periodEnd)}`, 50, startY + 45);
+
+    // Client Info
+    doc.text('Bill To:', 350, startY, { width: 200 });
+    doc.text(invoice.client.name, 350, startY + 15, { width: 200 });
+    if (invoice.client.address) {
+        doc.text(invoice.client.address, 350, startY + 30, { width: 200 });
+    }
+    if (invoice.client.taxId) {
+        doc.text(`Tax ID: ${invoice.client.taxId}`, 350, startY + 60, { width: 200 });
+    }
+
+    doc.moveDown(3);
+
+    // Table
+    const tableTop = doc.y + 20;
+    const columnPositions = [50, 250, 300, 360, 460];
+    const columnWidths = [200, 50, 60, 100, 100];
+
+    doc.fontSize(9).fillColor('#000000');
+    doc.text('Description', columnPositions[0], tableTop);
+    doc.text('Qty', columnPositions[1], tableTop, { width: columnWidths[1], align: 'right' });
+    doc.text('Unit', columnPositions[2], tableTop, { width: columnWidths[2], align: 'right' });
+    doc.text('Unit Price (IDR)', columnPositions[3], tableTop, { width: columnWidths[3], align: 'right' });
+    doc.text('Amount (IDR)', columnPositions[4], tableTop, { width: columnWidths[4], align: 'right' });
+
+    doc.moveTo(50, tableTop + 15).lineTo(560, tableTop + 15).stroke();
+
+    let currentY = tableTop + 25;
+    invoice.lines.forEach((line: any) => {
+        const unitPrice = Number(line.amountIdr) / (Number(line.quantityTotal) || 1);
+
+        doc.text(line.productNameSnapshot, columnPositions[0], currentY, { width: columnWidths[0] });
+        doc.text(line.quantityTotal.toString(), columnPositions[1], currentY, { width: columnWidths[1], align: 'right' });
+        doc.text(line.unitNameSnapshot, columnPositions[2], currentY, { width: columnWidths[2], align: 'right' });
+        doc.text(formatCurrency(unitPrice), columnPositions[3], currentY, { width: columnWidths[3], align: 'right' });
+        doc.text(formatCurrency(line.amountIdr), columnPositions[4], currentY, { width: columnWidths[4], align: 'right' });
+
+        currentY += 20;
+    });
+
+    // Summary
+    currentY += 10;
+    doc.moveTo(50, currentY).lineTo(560, currentY).stroke();
+
+    currentY += 15;
+    const summaryX = 410;
+
+    doc.text('Subtotal:', summaryX, currentY);
+    doc.text(formatCurrency(invoice.subtotalIdr), 480, currentY, { width: 80, align: 'right' });
+
+    currentY += 20;
+    doc.text(`Tax (${Number(invoice.taxRate) * 100}%):`, summaryX, currentY);
+    doc.text(formatCurrency(invoice.taxAmountIdr), 480, currentY, { width: 80, align: 'right' });
+
+    currentY += 20;
+    doc.fontSize(11).fillColor('#000000');
+    doc.text('Total:', summaryX, currentY);
+    doc.text(formatCurrency(invoice.totalIdr), 480, currentY, { width: 80, align: 'right' });
+
+    // Footer
+    doc.fontSize(8).fillColor('#666666');
+    doc.text(
+        'Please make payment before the due date. Thank you for your business!',
+        50,
+        doc.page.height - 100,
+        { align: 'center', width: doc.page.width - 100 }
+    );
+
+    doc.end();
+
+    await new Promise((resolve, reject) => {
+        stream.on('finish', resolve);
+        stream.on('error', reject);
+    });
+
+    return `storage/invoices/${filename}`;
 }

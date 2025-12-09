@@ -9,13 +9,15 @@
 ## Table of Contents
 
 1. [Health Check](#health-check)
-2. [Products API](#products-api)
-3. [Clients API](#clients-api)
-4. [Subscriptions API](#subscriptions-api)
-5. [Usage Daily API](#usage-daily-api)
-6. [FX Rates API](#fx-rates-api)
-7. [Quotations API](#quotations-api)
-8. [Error Handling](#error-handling)
+2. [Authentication API](#authentication-api)
+3. [Products API](#products-api)
+4. [Clients API](#clients-api)
+5. [Subscriptions API](#subscriptions-api)
+6. [Usage Daily API](#usage-daily-api)
+7. [FX Rates API](#fx-rates-api)
+8. [Quotations API](#quotations-api)
+9. [Invoices API](#invoices-api)
+10. [Error Handling](#error-handling)
 
 ---
 
@@ -31,6 +33,103 @@
 ```json
 {
   "status": "ok"
+}
+```
+
+---
+
+## Authentication API
+
+### Get Google OAuth2 Login URL
+
+**Endpoint:** `GET /api/auth/google/url`
+
+**Description:** Get the Google OAuth2 authorization URL to redirect users for login.
+
+**Response:**
+```json
+{
+  "url": "https://accounts.google.com/o/oauth2/v2/auth?client_id=..."
+}
+```
+
+**Usage:**
+```bash
+curl http://localhost:3000/api/auth/google/url
+```
+
+Redirect the user's browser to the returned URL. After authentication, Google will redirect back to the callback URL with an authorization code.
+
+---
+
+### Google OAuth2 Callback
+
+**Endpoint:** `GET /api/auth/google/callback`
+
+**Query Parameters:**
+- `code` (required): Authorization code from Google
+
+**Description:** Handle Google OAuth2 callback and exchange authorization code for user tokens. This endpoint is automatically called by Google after user login.
+
+**Response:**
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "uuid",
+    "email": "user@gmail.com",
+    "name": "John Doe",
+    "pictureUrl": "https://lh3.googleusercontent.com/...",
+    "role": "ADMIN"
+  }
+}
+```
+
+**Usage:**
+Store the returned `token` in your client application (e.g., localStorage) and include it in the `Authorization` header for protected endpoints:
+
+```
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+---
+
+### Get Current User
+
+**Endpoint:** `GET /api/auth/me`
+
+**Authentication:** Required
+
+**Headers:**
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+**Description:** Get the current authenticated user's information.
+
+**Response (200 OK):**
+```json
+{
+  "id": "uuid",
+  "email": "user@gmail.com",
+  "name": "John Doe",
+  "role": "ADMIN",
+  "googleEmail": "user@gmail.com",
+  "pictureUrl": "https://lh3.googleusercontent.com/..."
+}
+```
+
+**Response (401 Unauthorized):**
+```json
+{
+  "error": "No token provided"
+}
+```
+
+**Response (403 Forbidden):**
+```json
+{
+  "error": "Invalid or expired token"
 }
 ```
 
@@ -225,6 +324,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
     "id": "uuid",
     "name": "TechStart Indonesia",
     "legalName": "PT TechStart Indonesia",
+    "aliases": ["TechStart", "TSI"],
     "billingEmail": "billing@techstart.id",
     "financeEmail": "finance@techstart.id",
     "taxId": "01.234.567.8-901.000",
@@ -250,6 +350,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
   "id": "uuid",
   "name": "TechStart Indonesia",
   "legalName": "PT TechStart Indonesia",
+  "aliases": ["TechStart", "TSI"],
   "billingEmail": "billing@techstart.id",
   "financeEmail": "finance@techstart.id",
   "taxId": "01.234.567.8-901.000",
@@ -273,6 +374,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
 {
   "name": "TechStart Indonesia",
   "legalName": "PT TechStart Indonesia",
+  "aliases": ["TechStart", "TSI"],
   "billingEmail": "billing@techstart.id",
   "financeEmail": "finance@techstart.id",
   "taxId": "01.234.567.8-901.000",
@@ -289,6 +391,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
   "id": "uuid",
   "name": "TechStart Indonesia",
   "legalName": "PT TechStart Indonesia",
+  "aliases": ["TechStart", "TSI"],
   "billingEmail": "billing@techstart.id",
   "financeEmail": "finance@techstart.id",
   "taxId": "01.234.567.8-901.000",
@@ -346,7 +449,7 @@ curl http://localhost:3000/api/products/123e4567-e89b-12d3-a456-426614174000
     "clientId": "uuid",
     "productId": "uuid",
     "status": "ACTIVE",
-    "startDate": "2025-01-01",
+    "startDate": "2025-01-01T00:00:00.000Z",
     "endDate": null,
     "billingAnchorDay": 5,
     "unitPriceUsdOverride": null,
@@ -791,6 +894,309 @@ curl "http://localhost:3000/api/fx-rates?date=2025-01-01"
 ```json
 {
   "error": "Cannot send quotation in status ACCEPTED"
+}
+```
+
+---
+
+### Accept Quotation
+
+**Endpoint:** `POST /api/quotations/:id/accept`
+
+**Authentication:** Required
+
+**Headers:**
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+**Description:** Accept a quotation and automatically create an invoice.
+
+**Behavior:**
+- Sets quotation status to `ACCEPTED`
+- Sets `acceptedAt` timestamp
+- Creates a new Invoice with status `READY_FOR_TAX_INVOICE`
+- Generates invoice PDF automatically
+- Copies quotation lines to invoice lines
+
+**Response (200 OK):**
+```json
+{
+  "id": "uuid",
+  "quoteNumber": "Q-20250101-A1B2",
+  "status": "ACCEPTED",
+  "acceptedAt": "2025-01-02T10:30:00.000Z",
+  ...
+}
+```
+
+**Error Responses:**
+
+**400 Bad Request:** Already accepted/denied
+```json
+{
+  "error": "Quotation is already ACCEPTED"
+}
+```
+
+---
+
+### Deny Quotation
+
+**Endpoint:** `POST /api/quotations/:id/deny`
+
+**Authentication:** Required
+
+**Headers:**
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+**Description:** Deny a quotation.
+
+**Behavior:**
+- Sets quotation status to `DENIED`
+- Sets `deniedAt` timestamp
+
+**Response (200 OK):**
+```json
+{
+  "id": "uuid",
+  "quoteNumber": "Q-20250101-A1B2",
+  "status": "DENIED",
+  "deniedAt": "2025-01-02T10:30:00.000Z",
+  ...
+}
+```
+
+---
+
+## Invoices API
+
+### List Invoices
+
+**Endpoint:** `GET /api/invoices`
+
+**Authentication:** Required
+
+**Headers:**
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+**Query Parameters:**
+- `status` (optional): Filter by status (e.g., `READY_FOR_TAX_INVOICE`, `READY_TO_SEND`, `SENT`)
+
+**Example Request:**
+```bash
+curl -H "Authorization: Bearer <token>" \
+  "http://localhost:3000/api/invoices?status=READY_FOR_TAX_INVOICE"
+```
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": "uuid",
+    "invoiceNumber": "INV-20250102-A1B2",
+    "clientId": "uuid",
+    "quotationId": "uuid",
+    "status": "READY_FOR_TAX_INVOICE",
+    "periodStart": "2025-01-01",
+    "periodEnd": "2025-01-31",
+    "dueDate": "2025-02-01",
+    "subtotalIdr": "3005440.00",
+    "taxRate": "0.1100",
+    "taxAmountIdr": "330599.00",
+    "totalIdr": "3336039.00",
+    "pdfPath": "storage/invoices/INV-20250102-A1B2.pdf",
+    "sentAt": null,
+    "createdAt": "2025-01-02T10:30:00.000Z",
+    "client": { ... }
+  }
+]
+```
+
+---
+
+### Get Invoice by ID
+
+**Endpoint:** `GET /api/invoices/:id`
+
+**Authentication:** Required
+
+**Response (200 OK):**
+```json
+{
+  "id": "uuid",
+  "invoiceNumber": "INV-20250102-A1B2",
+  "clientId": "uuid",
+  "quotationId": "uuid",
+  "status": "READY_TO_SEND",
+  "periodStart": "2025-01-01",
+  "periodEnd": "2025-01-31",
+  "dueDate": "2025-02-01",
+  "subtotalIdr": "3005440.00",
+  "taxRate": "0.1100",
+  "taxAmountIdr": "330599.00",
+  "totalIdr": "3336039.00",
+  "pdfPath": "storage/invoices/INV-20250102-A1B2.pdf",
+  "sentAt": null,
+  "createdAt": "2025-01-02T10:30:00.000Z",
+  "client": { ... },
+  "lines": [ ... ],
+  "taxInvoices": [
+    {
+      "id": "uuid",
+      "invoiceId": "uuid",
+      "filePath": "storage/tax-invoices/tax-inv-1234567890-123456789.pdf",
+      "uploadedByUserId": "uuid",
+      "createdAt": "2025-01-02T11:00:00.000Z"
+    }
+  ]
+}
+```
+
+---
+
+### Upload Tax Invoice
+
+**Endpoint:** `POST /api/invoices/:id/tax-invoice`
+
+**Authentication:** Required
+
+**Content-Type:** `multipart/form-data`
+
+**Form Data:**
+- `file` (required): PDF file of the tax invoice (faktur pajak)
+
+**Description:** Upload a tax invoice PDF and update invoice status to `READY_TO_SEND`.
+
+**Example Request (using curl):**
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <token>" \
+  -F "file=@/path/to/tax-invoice.pdf" \
+  http://localhost:3000/api/invoices/<invoice_id>/tax-invoice
+```
+
+**Example Request (using Postman):**
+1. Set method to POST
+2. Add `Authorization: Bearer <token>` header
+3. Go to Body tab
+4. Select `form-data`
+5. Add key `file` with type `File`
+6. Select your PDF file
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "filePath": "storage/tax-invoices/tax-inv-1234567890-123456789.pdf"
+}
+```
+
+**Behavior:**
+- Saves PDF file to `storage/tax-invoices/`
+- Creates `TaxInvoice` record in database
+- Updates invoice status from `READY_FOR_TAX_INVOICE` to `READY_TO_SEND`
+
+**Error Responses:**
+
+**400 Bad Request:** No file uploaded
+```json
+{
+  "error": "No file uploaded"
+}
+```
+
+**MulterError:** Field name missing
+```json
+{
+  "error": "Field name missing"
+}
+```
+*This occurs when the file field is not named `file`.*
+
+---
+
+### Get Invoice Email Preview
+
+**Endpoint:** `GET /api/invoices/:id/email-preview`
+
+**Authentication:** Required
+
+**Description:** Preview invoice email content before sending.
+
+**Response (200 OK):**
+```json
+{
+  "subject": "Invoice INV-20250102-A1B2 - TechStart Indonesia",
+  "htmlBody": "<p>Yth. Tim Keuangan <strong>TechStart Indonesia</strong>,</p>...",
+  "textBody": "Yth. Tim Keuangan TechStart Indonesia,\n\nBerikut kami sampaikan Invoice...",
+  "toEmailDefault": "billing@techstart.id"
+}
+```
+
+---
+
+### Send Invoice Email
+
+**Endpoint:** `POST /api/invoices/:id/send-email`
+
+**Authentication:** Required
+
+**Headers:**
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+**Request Body (All Optional):**
+```json
+{
+  "toEmail": "custom@email.com",
+  "subject": "Custom Subject",
+  "htmlBody": "<p>Custom HTML body</p>",
+  "textBody": "Custom text body"
+}
+```
+
+**Description:** Send invoice email with both invoice PDF and tax invoice PDF attachments.
+
+**Requirements:**
+- Invoice status must be `READY_TO_SEND` or `SENT`
+- Tax invoice must be uploaded
+- Invoice PDF must exist (auto-generated if missing)
+
+**Behavior:**
+- Attaches invoice PDF
+- Attaches tax invoice PDF(s)
+- Creates EmailLog record
+- Updates invoice status to `SENT`
+- Updates `sentAt` timestamp
+- Sends from the authenticated user's Gmail account
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "messageId": "<gmail-message-id@mail.gmail.com>"
+}
+```
+
+**Error Responses:**
+
+**500 Internal Server Error:** Invalid status
+```json
+{
+  "error": "Invoice status READY_FOR_TAX_INVOICE is not ready to send (needs tax invoice)."
+}
+```
+
+**500 Internal Server Error:** PDF not found
+```json
+{
+  "error": "PDF file not found at /path/to/file.pdf"
 }
 ```
 

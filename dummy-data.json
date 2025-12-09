@@ -140,6 +140,10 @@
             "body": {
                 "name": "TechStart Indonesia",
                 "legalName": "PT TechStart Indonesia",
+                "aliases": [
+                    "TechStart",
+                    "TSI"
+                ],
                 "billingEmail": "billing@techstart.id",
                 "financeEmail": "finance@techstart.id",
                 "taxId": "01.234.567.8-901.000",
@@ -155,6 +159,10 @@
             "body": {
                 "name": "Tokopedia Commerce",
                 "legalName": "PT Tokopedia Digital",
+                "aliases": [
+                    "Tokopedia",
+                    "Toped"
+                ],
                 "billingEmail": "billing@tokopedia.com",
                 "financeEmail": "ar@tokopedia.com",
                 "taxId": "02.345.678.9-012.000",
@@ -185,6 +193,10 @@
             "body": {
                 "name": "Garena Indonesia",
                 "legalName": "PT Garena Indonesia",
+                "aliases": [
+                    "Garena",
+                    "Sea Group"
+                ],
                 "billingEmail": "billing@garena.id",
                 "financeEmail": "finance.id@garena.com",
                 "taxId": "04.567.890.1-234.000",

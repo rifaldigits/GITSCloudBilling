@@ -4,16 +4,16 @@ import * as usageRepo from '../repositories/usageDailyRepository';
 export const getUsage = async (req: Request, res: Response) => {
     try {
         const { subscriptionId } = req.params;
-        const { start, end } = req.query;
+        const { startDate, endDate } = req.query;
 
-        if (!start || !end) {
-            return res.status(400).json({ error: 'Start and end dates are required' });
+        if (!startDate || !endDate) {
+            return res.status(400).json({ error: 'startDate and endDate query parameters are required' });
         }
 
         const usage = await usageRepo.getUsageForSubscriptionAndPeriod(
             subscriptionId,
-            new Date(start as string),
-            new Date(end as string)
+            new Date(startDate as string),
+            new Date(endDate as string)
         );
         res.json(usage);
     } catch (error) {

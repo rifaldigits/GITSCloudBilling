@@ -10,6 +10,12 @@ GITS Cloud Billing is a TypeScript-based backend application designed to handle 
 
 ### ✨ Core Features
 
+- **Google OAuth2 Authentication**
+  - Secure user login via Google
+  - JWT-based session management
+  - Per-user email sending with user's Gmail account
+  - Role-based access (ADMIN, FINANCE)
+
 - **Multi-Model Pricing Engine**
   - Fixed pricing for standard subscriptions
   - Prorated pricing based on daily usage
@@ -21,6 +27,15 @@ GITS Cloud Billing is a TypeScript-based backend application designed to handle 
   - Professional PDF generation with company branding
   - Email delivery with PDF attachments via Gmail API
   - Preview mode before sending
+  - Accept/Deny quotation workflow
+  - Automatic invoice creation on acceptance
+
+- **Invoice Management**
+  - Auto-generate invoices from accepted quotations
+  - Professional PDF generation
+  - Tax invoice (faktur pajak) upload support
+  - Email delivery with both invoice and tax invoice PDFs
+  - Status tracking (READY_FOR_TAX_INVOICE → READY_TO_SEND → SENT)
 
 - **Subscription & Usage Tracking**
   - Multi-client subscription management
@@ -37,7 +52,8 @@ GITS Cloud Billing is a TypeScript-based backend application designed to handle 
   - RESTful endpoints for all core entities
   - CRUD operations for products, clients, subscriptions
   - Usage tracking and reporting
-  - Quotation generation and email workflows
+  - Quotation and invoice workflows
+  - Protected endpoints requiring authentication
 
 ## Tech Stack
 
@@ -83,12 +99,13 @@ DATABASE_URL="postgresql://user:password@localhost:5432/gits_billing"
 # Server
 PORT=3000
 
-# Gmail OAuth2 (for email features)
-GMAIL_CLIENT_ID=your_client_id
-GMAIL_CLIENT_SECRET=your_client_secret
-GMAIL_REFRESH_TOKEN=your_refresh_token
-GMAIL_REDIRECT_URL=https://developers.google.com/oauthplayground
-GMAIL_USER_EMAIL=your_email@gmail.com
+# Google OAuth2 (for user authentication and email)
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+
+# JWT Secret (for session management)
+JWT_SECRET=your_random_secret_key_here
 ```
 
 ### 4. Database Setup
@@ -136,6 +153,12 @@ http://localhost:3000/api
 ```
 
 ### Endpoints
+
+#### Authentication
+
+- `GET /api/auth/google/url` - Get Google OAuth2 login URL
+- `GET /api/auth/google/callback` - Google OAuth2 callback (returns JWT)
+- `GET /api/auth/me` - Get current user info (requires authentication)
 
 #### Products
 
@@ -188,7 +211,9 @@ http://localhost:3000/api
 
 - `GET /api/quotations/:id` - Get quotation details
 - `GET /api/quotations/:id/email-preview` - Preview email content
-- `POST /api/quotations/:id/send-email` - Send quotation via email
+- `POST /api/quotations/:id/accept` - Accept quotation (creates invoice) 🔒
+- `POST /api/quotations/:id/deny` - Deny quotation 🔒
+- `POST /api/quotations/:id/send-email` - Send quotation via email 🔒
   ```json
   {
     "toEmail": "client@example.com",  // optional override
@@ -197,6 +222,16 @@ http://localhost:3000/api
     "textBody": "custom text"          // optional override
   }
   ```
+
+#### Invoices
+
+- `GET /api/invoices` - List invoices (filter by `?status=READY_FOR_TAX_INVOICE`) 🔒
+- `GET /api/invoices/:id` - Get invoice details 🔒
+- `POST /api/invoices/:id/tax-invoice` - Upload tax invoice PDF (multipart/form-data with `file` field) 🔒
+- `GET /api/invoices/:id/email-preview` - Preview invoice email 🔒
+- `POST /api/invoices/:id/send-email` - Send invoice + tax invoice via email 🔒
+
+🔒 = Requires authentication (Bearer token in Authorization header)
 
 ### Health Check
 
@@ -274,7 +309,7 @@ The billing engine (`src/services/billingEngine.ts`) implements three pricing mo
 
 Key entities:
 - **Product**: Service definitions with pricing types
-- **Client**: Customer information
+- **Client**: Customer information (with support for multiple aliases)
 - **Subscription**: Client-product relationships
 - **UsageDaily**: Daily usage metrics for prorated billing
 - **FxRate**: Currency conversion rates
@@ -352,13 +387,16 @@ http://localhost:3000/storage/quotations/<filename>.pdf
 
 ## Future Enhancements
 
-- [ ] Authentication & Authorization (JWT)
-- [ ] Invoice generation from quotations
+- [x] Authentication & Authorization (Google OAuth2 + JWT) ✅
+- [x] Invoice generation from quotations ✅
+- [x] Per-user email sending via Gmail ✅
 - [ ] Payment tracking
 - [ ] Dashboard & reporting
 - [ ] Email templates customization
 - [ ] Webhook support for automated usage ingestion
 - [ ] Multi-currency support beyond USD/IDR
+- [ ] Frontend application
+- [ ] Automated payment reconciliation
 
 ## Contributing
 

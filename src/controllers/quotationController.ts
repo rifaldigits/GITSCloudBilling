@@ -1,5 +1,8 @@
 import { Request, Response } from 'express';
 import * as quotationService from '../services/quotationService';
+import { AuthRequest } from '../middleware/authMiddleware';
+
+// ... (previous imports and functions)
 
 export const generateQuotation = async (req: Request, res: Response) => {
     try {
@@ -49,12 +52,39 @@ export const getEmailPreview = async (req: Request, res: Response) => {
     }
 };
 
-export const sendEmail = async (req: Request, res: Response) => {
+// ... (existing functions generateQuotation, getQuotation, getEmailPreview)
+
+export const acceptQuotation = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const result = await quotationService.setQuotationStatus(id, 'ACCEPTED');
+        res.json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message || 'Failed to accept quotation' });
+    }
+};
+
+export const denyQuotation = async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const result = await quotationService.setQuotationStatus(id, 'DENIED');
+        res.json(result);
+    } catch (error: any) {
+        res.status(400).json({ error: error.message || 'Failed to deny quotation' });
+    }
+};
+
+export const sendEmail = async (req: AuthRequest, res: Response) => {
+    console.log('sendEmail - req.user = ', req.user);
     try {
         const { id } = req.params;
         const overrides = req.body; // { toEmail, subject, htmlBody, textBody }
 
-        const result = await quotationService.sendQuotationEmail(id, overrides);
+        if (!req.user || !req.user.id) {
+            return res.status(401).json({ error: 'User not authenticated' });
+        }
+
+        const result = await quotationService.sendQuotationEmail(id, req.user.id, overrides);
         res.json(result);
     } catch (error: any) {
         console.error('Email sending error:', error);
